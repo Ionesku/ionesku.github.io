@@ -1109,6 +1109,7 @@
                 
                 accretionDisk.particles.geometry.attributes.position.needsUpdate = true;
             }
+		}
         
         // Обновление орбитального движения
         function updateOrbit(body, center, delta) {
@@ -1608,16 +1609,6 @@
                     const pulse = window.pulses[i];
                     pulse.scale.multiplyScalar(1 + pulse.userData.expansionRate * 0.05 * simulationSpeed);
                     pulse.material.opacity -= 0.02 * simulationSpeed;
-                    
-                    if (pulse.material.opacity <= 0) {
-                        scene.remove(pulse);
-                        window.pulses.splice(i, 1);
-                    }
-                }
-            }
-            
-            renderer.render(scene, camera);
-        }Speed;
                     
                     if (pulse.material.opacity <= 0) {
                         scene.remove(pulse);
