@@ -55,7 +55,7 @@
         <button id="toggleGravitationalLensing">Вкл/выкл гравитационное линзирование</button>
         <div style="margin-top: 10px;">
             <label for="simulationSpeed" style="color: white; display: block; margin-bottom: 5px;">Скорость симуляции: <span id="speedValue">1.0</span>x</label>
-            <input type="range" id="simulationSpeed" min="0.1" max="5" step="0.1" value="1" style="width: 100%;">
+            <input type="range" id="simulationSpeed" min="0.1" max="5" step="0.05" value="1" style="width: 100%;">
         </div>
     </div>
 
@@ -75,7 +75,7 @@
         let showAccretionDisk = true;
         let showGravitationalLensing = true;
         let clock = new THREE.Clock();
-        let simulationSpeed = 1.0;
+        let simulationSpeed = 0.5;
         let particleSystem, particleCount = 10000;
         let noiseGenerator = new SimplexNoise();
         
@@ -1550,7 +1550,7 @@
         // Обновление физики с учетом скорости симуляции
         function updatePhysics(delta) {
             // Применяем множитель скорости симуляции
-            const scaledDelta = delta * simulationSpeed;
+            const scaledDelta = delta * simulationSpeed * 0.1;
             
             // Обновление положения звезды
             updateBodyPosition(star, blackHole, scaledDelta);
@@ -1813,7 +1813,7 @@
                 camera.position.y = 30 + Math.sin(time * 0.5) * 20;
                 camera.lookAt(0, 0, 0);
             } else if (cameraMode === 'follow') {
-                // Камера следует за выбранной планетой или звездой
+                // Определяем цель слежения
                 let target;
                 if (followIndex === planets.length) {
                     target = star;
@@ -1822,63 +1822,52 @@
                 } else if (followIndex < planets.length) {
                     target = planets[followIndex];
                 } else {
-                    // В случае неверного индекса возвращаемся к орбитальному виду
                     cameraMode = 'orbit';
                     return;
                 }
-                
-                // Инициализируем userData для камеры, если необходимо
+
+                // Инициализируем userData для камеры
                 if (!camera.userData) camera.userData = {};
-                
-                // Фиксированное положение камеры относительно объекта - немного позади и сбоку
-                // Создаем более стабильную позицию, учитывающую размер объекта
-                let offsetDistance = 10;
-                if (target === star || target === donorStar) {
-                    offsetDistance = target.geometry.parameters.radius * 3;
-                } else {
-                    offsetDistance = target.geometry.parameters.radius * 8;
-                }
-                
-                // Создаем смещение в локальной системе координат объекта 
-                // (позиция камеры будет "следовать" за объектом и его вращением)
-                const offsetX = -offsetDistance * 0.7; // позади
-                const offsetY = offsetDistance * 0.5;  // немного выше
-                const offsetZ = offsetDistance * 0.7;  // сбоку
-                
-                // Целевая позиция для камеры
-                const targetPosition = new THREE.Vector3(
-                    target.position.x + offsetX,
-                    target.position.y + offsetY,
-                    target.position.z + offsetZ
+
+                // Расстояние камеры от объекта зависит от его размера
+                const baseOffset = target === star || target === donorStar
+                    ? target.geometry.parameters.radius * 5
+                    : target.geometry.parameters.radius * 15;
+
+                // Вычисляем вектор направления движения планеты (примерно по орбите)
+                const velocity = target.velocity || new THREE.Vector3(
+                    -Math.sin(target.orbitAngle) * target.orbitSpeed,
+                    0,
+                    Math.cos(target.orbitAngle) * target.orbitSpeed
                 );
-                
-                // Плавное перемещение к целевой позиции (интерполяция)
-                const lerpFactor = Math.min(0.2, delta * 2); // Ограничиваем скорость смещения
+
+                // Позиция камеры: впереди объекта, с учётом направления движения
+                const directionAhead = velocity.clone().normalize().multiplyScalar(baseOffset);
+                const targetPosition = new THREE.Vector3()
+                    .addVectors(target.position, directionAhead);
+                targetPosition.y += baseOffset * 0.2; // Немного выше объекта
+
+                // Плавное перемещение камеры
+                const lerpFactor = Math.min(0.05 + simulationSpeed * 0.05, 0.5); // Адаптивная плавность
                 if (!camera.userData.previousPosition) {
                     camera.userData.previousPosition = targetPosition.clone();
                 }
-                
                 camera.userData.previousPosition.lerp(targetPosition, lerpFactor);
                 camera.position.copy(camera.userData.previousPosition);
-                
-                // Определяем, на что смотрит камера
-                let lookAtTarget;
-                if (followIndex < planets.length) {
-                    // Если следим за планетой, смотрим на саму планету (чтобы она была в кадре)
-                    lookAtTarget = target.position.clone();
-                } else {
-                    // Для звезд смотрим на черную дыру
-                    lookAtTarget = blackHole.position.clone();
-                }
-                
-                // Плавный поворот камеры к целевой точке
+
+                // Камера смотрит на объект
                 if (!camera.userData.lookAtTarget) {
-                    camera.userData.lookAtTarget = lookAtTarget.clone();
-                } else {
-                    camera.userData.lookAtTarget.lerp(lookAtTarget, lerpFactor);
+                    camera.userData.lookAtTarget = target.position.clone();
                 }
-                
+                camera.userData.lookAtTarget.lerp(target.position, lerpFactor);
                 camera.lookAt(camera.userData.lookAtTarget);
+
+                // Убеждаемся, что камера не слишком близко к черной дыре
+                const distToBH = camera.position.distanceTo(blackHole.position);
+                if (distToBH < 10) {
+                    const safeDirection = camera.position.clone().sub(blackHole.position).normalize();
+                    camera.position.copy(blackHole.position).add(safeDirection.multiplyScalar(10));
+                }
             } else if (cameraMode === 'blackhole') {
                 // Вид от черной дыры, смотрим на звезду с небольшими вариациями для живости
                 const time = Date.now() * 0.0001;
