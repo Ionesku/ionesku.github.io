@@ -270,6 +270,71 @@
             scene.add(particles);
         }
         
+        		// 4. Исправление джетов (синих "штук")
+		function createJet() {
+			// Создаем более тонкие и элегантные джеты
+			
+			// Верхний джет
+			const jetGeometry1 = new THREE.ConeGeometry(0.5, 30, 16, 1);
+			const jetMaterial1 = new THREE.MeshBasicMaterial({
+				color: 0x00aaff,
+				transparent: true,
+				opacity: 0.6,
+				side: THREE.DoubleSide,
+				blending: THREE.AdditiveBlending
+			});
+			
+			const jet1 = new THREE.Mesh(jetGeometry1, jetMaterial1);
+			jet1.position.set(0, 15, 0); // Располагаем выше
+			blackHole.add(jet1);
+			
+			// Добавляем внутренний конус для свечения
+			const innerJetGeometry1 = new THREE.ConeGeometry(0.2, 35, 16, 1);
+			const innerJetMaterial1 = new THREE.MeshBasicMaterial({
+				color: 0x88eeff,
+				transparent: true,
+				opacity: 0.8,
+				side: THREE.DoubleSide,
+				blending: THREE.AdditiveBlending
+			});
+			
+			const innerJet1 = new THREE.Mesh(innerJetGeometry1, innerJetMaterial1);
+			innerJet1.position.set(0, 0, 0);
+			jet1.add(innerJet1);
+			
+			// Нижний джет
+			const jetGeometry2 = new THREE.ConeGeometry(0.5, 30, 16, 1);
+			const jetMaterial2 = new THREE.MeshBasicMaterial({
+				color: 0x00aaff,
+				transparent: true,
+				opacity: 0.6,
+				side: THREE.DoubleSide,
+				blending: THREE.AdditiveBlending
+			});
+			
+			const jet2 = new THREE.Mesh(jetGeometry2, jetMaterial2);
+			jet2.position.set(0, -15, 0);
+			jet2.rotation.x = Math.PI; // Поворачиваем вниз
+			blackHole.add(jet2);
+			
+			// Добавляем внутренний конус для свечения (нижний)
+			const innerJetGeometry2 = new THREE.ConeGeometry(0.2, 35, 16, 1);
+			const innerJetMaterial2 = new THREE.MeshBasicMaterial({
+				color: 0x88eeff,
+				transparent: true,
+				opacity: 0.8,
+				side: THREE.DoubleSide,
+				blending: THREE.AdditiveBlending
+			});
+			
+			const innerJet2 = new THREE.Mesh(innerJetGeometry2, innerJetMaterial2);
+			innerJet2.position.set(0, 0, 0);
+			jet2.add(innerJet2);
+			
+			// Добавляем частицы для джета более элегантно
+			createImprovedJetParticles(jet1, true);
+			createImprovedJetParticles(jet2, false);
+		}
 
 		// 8. Создание звезды-сверхгиганта
 		function createSupergiantStar() {
@@ -425,75 +490,8 @@
 			blackHole.mass = 1e30; // Масса в кг
 			blackHole.schwarzschildRadius = (2 * G * blackHole.mass) / (C * C);
 			
-			// Отключаем джеты для стиля "Интерстеллар"
-			// НЕ вызываем функцию createJet();
-		}
-        
-
-		// 4. Исправление джетов (синих "штук")
-		function createJet() {
-			// Создаем более тонкие и элегантные джеты
-			
-			// Верхний джет
-			const jetGeometry1 = new THREE.ConeGeometry(0.5, 30, 16, 1);
-			const jetMaterial1 = new THREE.MeshBasicMaterial({
-				color: 0x00aaff,
-				transparent: true,
-				opacity: 0.6,
-				side: THREE.DoubleSide,
-				blending: THREE.AdditiveBlending
-			});
-			
-			const jet1 = new THREE.Mesh(jetGeometry1, jetMaterial1);
-			jet1.position.set(0, 15, 0); // Располагаем выше
-			blackHole.add(jet1);
-			
-			// Добавляем внутренний конус для свечения
-			const innerJetGeometry1 = new THREE.ConeGeometry(0.2, 35, 16, 1);
-			const innerJetMaterial1 = new THREE.MeshBasicMaterial({
-				color: 0x88eeff,
-				transparent: true,
-				opacity: 0.8,
-				side: THREE.DoubleSide,
-				blending: THREE.AdditiveBlending
-			});
-			
-			const innerJet1 = new THREE.Mesh(innerJetGeometry1, innerJetMaterial1);
-			innerJet1.position.set(0, 0, 0);
-			jet1.add(innerJet1);
-			
-			// Нижний джет
-			const jetGeometry2 = new THREE.ConeGeometry(0.5, 30, 16, 1);
-			const jetMaterial2 = new THREE.MeshBasicMaterial({
-				color: 0x00aaff,
-				transparent: true,
-				opacity: 0.6,
-				side: THREE.DoubleSide,
-				blending: THREE.AdditiveBlending
-			});
-			
-			const jet2 = new THREE.Mesh(jetGeometry2, jetMaterial2);
-			jet2.position.set(0, -15, 0);
-			jet2.rotation.x = Math.PI; // Поворачиваем вниз
-			blackHole.add(jet2);
-			
-			// Добавляем внутренний конус для свечения (нижний)
-			const innerJetGeometry2 = new THREE.ConeGeometry(0.2, 35, 16, 1);
-			const innerJetMaterial2 = new THREE.MeshBasicMaterial({
-				color: 0x88eeff,
-				transparent: true,
-				opacity: 0.8,
-				side: THREE.DoubleSide,
-				blending: THREE.AdditiveBlending
-			});
-			
-			const innerJet2 = new THREE.Mesh(innerJetGeometry2, innerJetMaterial2);
-			innerJet2.position.set(0, 0, 0);
-			jet2.add(innerJet2);
-			
-			// Добавляем частицы для джета более элегантно
-			createImprovedJetParticles(jet1, true);
-			createImprovedJetParticles(jet2, false);
+			const jets = createRelativisticJets();
+            blackHole.jets = jets;
 		}
         
 		function createImprovedJetParticles(jet, isUp) {
@@ -554,89 +552,163 @@
 			jet.particles = particles;
 		}
 
-		function updateJetParticles(jet, delta) {
-			if (!jet.particles) return;
-			
-			const particles = jet.particles;
-			const positions = particles.geometry.attributes.position.array;
-			const velocities = particles.userData.velocities;
-			const lifetimes = particles.userData.lifetimes;
-			const sizes = particles.userData.sizes;
-			const isUp = particles.userData.isUp;
-			
-			for (let i = 0; i < lifetimes.length; i++) {
-				const i3 = i * 3;
-				
-				// Увеличиваем время жизни
-				lifetimes[i] += 0.01 * delta * simulationSpeed;
-				
-				// Обновляем позицию
-				positions[i3] += velocities[i3] * delta * simulationSpeed;
-				positions[i3+1] += velocities[i3+1] * delta * simulationSpeed;
-				positions[i3+2] += velocities[i3+2] * delta * simulationSpeed;
-				
-				// Если частица выходит за пределы или время жизни истекло, перезапускаем
-				const y = positions[i3+1];
-				const maxDistance = 30;
-				
-				if ((isUp && y > maxDistance) || (!isUp && y < -maxDistance) || lifetimes[i] >= 1.0) {
-					// Новая начальная позиция - ближе к оси джета
-					const angle = Math.random() * Math.PI * 2;
-					const radius = Math.random() * 0.1;
-					
-					positions[i3] = radius * Math.cos(angle);
-					positions[i3+1] = isUp ? 0 : 0;
-					positions[i3+2] = radius * Math.sin(angle);
-					
-					// Новая скорость - больше по вертикали, меньше в стороны
-					const speed = 0.05 + Math.random() * 0.15;
-					const directionY = isUp ? 1 : -1;
-					
-					velocities[i3] = (Math.random() - 0.5) * 0.01;
-					velocities[i3+1] = directionY * speed;
-					velocities[i3+2] = (Math.random() - 0.5) * 0.01;
-					
-					// Сбрасываем время жизни
-					lifetimes[i] = 0;
-				}
-			}
-			
-			particles.geometry.attributes.position.needsUpdate = true;
-			particles.geometry.attributes.size.needsUpdate = true;
-		}
+		function updateJetParticles(delta) {
+            // Перебираем все джеты черной дыры
+            if (!blackHole || !blackHole.children) return;
+            
+            blackHole.children.forEach(child => {
+                if (child.particles) {
+                    const particles = child.particles;
+                    const positions = particles.geometry.attributes.position.array;
+                    const velocities = particles.userData.velocities;
+                    const lifetimes = particles.userData.lifetimes;
+                    const isUp = particles.userData.isUp;
+                    
+                    for (let i = 0; i < lifetimes.length; i++) {
+                        const i3 = i * 3;
+                        
+                        // Увеличиваем время жизни
+                        lifetimes[i] += 0.01 * delta * simulationSpeed;
+                        
+                        // Обновляем позицию
+                        positions[i3] += velocities[i3] * delta * simulationSpeed;
+                        positions[i3+1] += velocities[i3+1] * delta * simulationSpeed;
+                        positions[i3+2] += velocities[i3+2] * delta * simulationSpeed;
+                        
+                        // Если частица вышла за пределы или время жизни истекло, пересоздаем
+                        if (lifetimes[i] >= 1.0 || 
+                            (isUp && positions[i3+1] > 100) || 
+                            (!isUp && positions[i3+1] < -100)) {
+                            
+                            // Создаем новую частицу у основания джета
+                            const angle = Math.random() * Math.PI * 2;
+                            const radius = Math.random() * 0.5;
+                            
+                            positions[i3] = Math.cos(angle) * radius;
+                            positions[i3+1] = isUp ? 0 : 0;
+                            positions[i3+2] = Math.sin(angle) * radius;
+                            
+                            // Обновляем скорость
+                            const speed = 1 + Math.random() * 5;
+                            velocities[i3] = (Math.random() - 0.5) * 0.1;
+                            velocities[i3+1] = isUp ? speed : -speed;
+                            velocities[i3+2] = (Math.random() - 0.5) * 0.1;
+                            
+                            // Сбрасываем время жизни
+                            lifetimes[i] = 0;
+                        }
+                    }
+                    
+                    particles.geometry.attributes.position.needsUpdate = true;
+                }
+            });
+        }
+
         
+
+        // 6. Создаем геометрию пути потока вещества
+        function createStreamPathGeometry(startPoint, endPoint) {
+            // Создаем путь с изгибом под действием гравитации
+            const curvePoints = [];
+            const segments = 50;
+            
+            // Вычисляем направление от звезды-донора к черной дыре
+            const direction = new THREE.Vector3().subVectors(endPoint, startPoint).normalize();
+            
+            // Вычисляем перпендикулярное направление в плоскости XZ
+            const perpDirection = new THREE.Vector3(-direction.z, 0, direction.x).normalize();
+            
+            // Расстояние между точками
+            const distance = startPoint.distanceTo(endPoint);
+            
+            // Создаем точки кривой с изгибом
+            for (let i = 0; i <= segments; i++) {
+                const t = i / segments;
+                
+                // Позиция вдоль прямой линии
+                const pos = new THREE.Vector3().lerpVectors(startPoint, endPoint, t);
+                
+                // Добавляем изгиб, максимальный в середине пути
+                const bendFactor = Math.sin(t * Math.PI) * distance * 0.05;
+                pos.add(perpDirection.clone().multiplyScalar(bendFactor));
+                
+                // Добавляем гравитационное искривление по мере приближения к черной дыре
+                if (t > 0.5) {
+                    const gravityPull = Math.pow((t - 0.5) * 2, 2) * distance * 0.1;
+                    pos.add(direction.clone().multiplyScalar(-gravityPull));
+                }
+                
+                curvePoints.push(pos);
+            }
+            
+            // Создаем кривую по точкам
+            const curve = new THREE.CatmullRomCurve3(curvePoints);
+            
+            // Создаем геометрию трубы вокруг кривой
+            const tubeGeometry = new THREE.TubeGeometry(curve, segments, 1.5, 8, false);
+            
+            return tubeGeometry;
+        }
+
         // Создание потока вещества от звезды-донора к черной дыре
         function createMatterStream() {
             const streamGeometry = new THREE.BufferGeometry();
+            
+            // Используем улучшенную текстуру для частиц потока
+            const particleTexture = createImprovedParticleTexture();
+            
             const streamMaterial = new THREE.PointsMaterial({
-                color: 0xffccaa,
-                size: 0.4,
+                color: 0xffddaa,
+                size: 0.6, // Увеличиваем размер частиц
                 transparent: true,
-                opacity: 0.7,
-                blending: THREE.AdditiveBlending
+                opacity: 0.9, // Увеличиваем непрозрачность
+                blending: THREE.AdditiveBlending,
+                map: particleTexture, // Используем текстуру с мягкими краями
+                depthWrite: false
             });
             
-            const positions = new Float32Array(3000 * 3); // 1000 точек, по 3 координаты
-            const velocities = new Float32Array(3000 * 3);
-            const lifetimes = new Float32Array(3000);
+            const particleCount = 5000; // Увеличиваем количество частиц
+            const positions = new Float32Array(particleCount * 3);
+            const velocities = new Float32Array(particleCount * 3);
+            const lifetimes = new Float32Array(particleCount);
+            const sizes = new Float32Array(particleCount); // Добавляем разные размеры
             
             // Инициализация частиц
-            for (let i = 0; i < 3000; i++) {
+            for (let i = 0; i < particleCount; i++) {
                 // Не показываем все частицы сразу, распределяем их жизненный цикл
                 lifetimes[i] = Math.random();
+                
+                // Различные размеры частиц для объемности
+                sizes[i] = 0.3 + Math.random() * 0.8;
                 
                 // Начальная позиция - возле звезды-донора
                 updateStreamParticle(i, positions, velocities, lifetimes, true);
             }
             
             streamGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            streamGeometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
             
             const streamParticles = new THREE.Points(streamGeometry, streamMaterial);
             streamParticles.userData.velocities = velocities;
             streamParticles.userData.lifetimes = lifetimes;
+            streamParticles.userData.sizes = sizes;
             scene.add(streamParticles);
             
+            // Добавляем свечение вдоль потока
+            const pathGeometry = createStreamPathGeometry(donorStar.position, blackHole.position);
+            const pathMaterial = new THREE.MeshBasicMaterial({
+                color: 0xffaa66,
+                transparent: true,
+                opacity: 0.2,
+                blending: THREE.AdditiveBlending,
+                side: THREE.DoubleSide
+            });
+            
+            const streamPath = new THREE.Mesh(pathGeometry, pathMaterial);
+            scene.add(streamPath);
+            
             donorStar.streamParticles = streamParticles;
+            donorStar.streamPath = streamPath; // Сохраняем ссылку на путь потока
         }
         
         // Обновление частицы в потоке вещества
@@ -644,25 +716,33 @@
             const i3 = index * 3;
             
             if (isInit || lifetimes[index] >= 1.0) {
-                // Создаем новую частицу возле звезды-донора
+                // Создаем новую частицу возле звезды-донора с более широким разбросом
                 const offset = new THREE.Vector3(
-                    (Math.random() - 0.5) * 5,
-                    (Math.random() - 0.5) * 5,
-                    (Math.random() - 0.5) * 5
+                    (Math.random() - 0.5) * donorStar.geometry.parameters.radius * 1.2,
+                    (Math.random() - 0.5) * donorStar.geometry.parameters.radius * 1.2,
+                    (Math.random() - 0.5) * donorStar.geometry.parameters.radius * 1.2
                 );
                 
                 positions[i3] = donorStar.position.x + offset.x;
                 positions[i3+1] = donorStar.position.y + offset.y;
                 positions[i3+2] = donorStar.position.z + offset.z;
                 
-                // Направление к черной дыре с небольшой случайностью
+                // Более реалистичное направление к черной дыре с изгибом траектории
+                // Базовое направление к черной дыре
                 const direction = new THREE.Vector3(
                     blackHole.position.x - positions[i3],
                     blackHole.position.y - positions[i3+1],
                     blackHole.position.z - positions[i3+2]
                 ).normalize();
                 
-                const speed = 0.2 + Math.random() * 0.3;
+                // Добавляем компонент перпендикулярный направлению для создания спирального движения
+                const perpComponent = new THREE.Vector3(-direction.z, 0, direction.x).normalize();
+                const perpFactor = (Math.random() - 0.5) * 0.3; // Случайное отклонение
+                
+                // Итоговое направление
+                direction.add(perpComponent.multiplyScalar(perpFactor)).normalize();
+                
+                const speed = 0.2 + Math.random() * 0.4; // Более широкий диапазон скоростей
                 velocities[i3] = direction.x * speed;
                 velocities[i3+1] = direction.y * speed;
                 velocities[i3+2] = direction.z * speed;
@@ -670,217 +750,381 @@
                 lifetimes[index] = 0;
             }
         }
-        
+                
 
-		// 3. Создание аккреционного диска в стиле "Интерстеллар"
-		function createAccretionDisk() {
-			// Создаем группу для аккреционного диска
-			const diskGroup = new THREE.Group();
-			
-			// Создаем основной тонкий диск (как в фильме "Интерстеллар")
-			const diskGeometry = new THREE.RingGeometry(8, 40, 128, 2);
-			
-			// Создаем canvas для текстуры
-			const canvas = document.createElement('canvas');
-			canvas.width = 1024;
-			canvas.height = 2;
-			const context = canvas.getContext('2d');
-			
-			// Создаем градиент в стиле "Интерстеллар" - яркий белый переходящий в янтарный
-			const gradient = context.createLinearGradient(0, 0, canvas.width, 0);
-			gradient.addColorStop(0, '#ffffff');
-			gradient.addColorStop(0.1, '#ffffee');
-			gradient.addColorStop(0.3, '#ffeeaa');
-			gradient.addColorStop(0.5, '#ffcc88');
-			gradient.addColorStop(0.7, '#ffaa66');
-			gradient.addColorStop(0.9, '#cc8855');
-			gradient.addColorStop(1, '#664433');
-			
-			context.fillStyle = gradient;
-			context.fillRect(0, 0, canvas.width, canvas.height);
-			
-			const texture = new THREE.Texture(canvas);
-			texture.needsUpdate = true;
-			
-			const diskMaterial = new THREE.MeshBasicMaterial({
-				map: texture,
-				side: THREE.DoubleSide,
-				transparent: true,
-				opacity: 0.9,
-				blending: THREE.AdditiveBlending
-			});
-			
-			const diskRing = new THREE.Mesh(diskGeometry, diskMaterial);
-			diskRing.rotation.x = Math.PI / 2;
-			diskGroup.add(diskRing);
-			
-			// Добавляем второй внутренний яркий диск
-			const innerDiskGeometry = new THREE.RingGeometry(6, 12, 128, 2);
-			
-			const innerCanvas = document.createElement('canvas');
-			innerCanvas.width = 1024;
-			innerCanvas.height = 2;
-			const innerContext = innerCanvas.getContext('2d');
-			
-			const innerGradient = innerContext.createLinearGradient(0, 0, innerCanvas.width, 0);
-			innerGradient.addColorStop(0, '#ffffff');
-			innerGradient.addColorStop(0.5, '#ffffff');
-			innerGradient.addColorStop(1, '#ffffdd');
-			
-			innerContext.fillStyle = innerGradient;
-			innerContext.fillRect(0, 0, innerCanvas.width, innerCanvas.height);
-			
-			const innerTexture = new THREE.Texture(innerCanvas);
-			innerTexture.needsUpdate = true;
-			
-			const innerDiskMaterial = new THREE.MeshBasicMaterial({
-				map: innerTexture,
-				side: THREE.DoubleSide,
-				transparent: true,
-				opacity: 1.0,
-				blending: THREE.AdditiveBlending
-			});
-			
-			const innerDiskRing = new THREE.Mesh(innerDiskGeometry, innerDiskMaterial);
-			innerDiskRing.rotation.x = Math.PI / 2;
-			diskGroup.add(innerDiskRing);
-			
-			// Создаем эффект размытия вокруг черной дыры
-			const glowGeometry = new THREE.SphereGeometry(7, 32, 32);
-			const glowMaterial = new THREE.MeshBasicMaterial({
-				color: 0xffffff,
-				transparent: true,
-				opacity: 0.15,
-				side: THREE.BackSide,
-				blending: THREE.AdditiveBlending
-			});
-			
-			const glow = new THREE.Mesh(glowGeometry, glowMaterial);
-			diskGroup.add(glow);
-			
-			accretionDisk = diskGroup;
-			scene.add(accretionDisk);
-			
-			// Добавляем частицы для более реалистичного эффекта
-			createInterstellarAccretionParticles();
-		}
-		
-		// 4. Создание частиц для аккреционного диска в стиле "Интерстеллар"
-		function createInterstellarAccretionParticles() {
-			const particlesGeometry = new THREE.BufferGeometry();
-			
-			// Создаем текстуру частицы
-			const particleTexture = createImprovedParticleTexture();
-			
-			const particlesMaterial = new THREE.PointsMaterial({
-				size: 0.4,
-				map: particleTexture,
-				transparent: true,
-				opacity: 0.8,
-				vertexColors: true,
-				blending: THREE.AdditiveBlending,
-				depthWrite: false
-			});
-			
-			const particleCount = 20000;
-			const particlesVertices = [];
-			const particlesVelocities = [];
-			const particlesColors = [];
-			
-			for (let i = 0; i < particleCount; i++) {
-				// Распределяем частицы в тонком плоском диске
-				// Используем закон распределения для концентрации частиц ближе к краям диска
-				let radius, angle, height;
-				
-				// 70% частиц концентрируем в основном диске
-				if (i < particleCount * 0.7) {
-					radius = 8 + Math.pow(Math.random(), 0.5) * 32;
-					angle = Math.random() * Math.PI * 2;
-					// Очень тонкий диск, как в фильме
-					height = (Math.random() - 0.5) * 0.3;
-				} else {
-					// 30% частиц размещаем в более широкой области для создания размытия
-					radius = 8 + Math.random() * 32;
-					angle = Math.random() * Math.PI * 2;
-					// Более широкое распределение
-					height = (Math.random() - 0.5) * 2;
-				}
-				
-				const x = radius * Math.cos(angle);
-				const y = height;
-				const z = radius * Math.sin(angle);
-				
-				particlesVertices.push(x, y, z);
-				
-				// Скорость - кеплеровская орбита
-				const speed = Math.sqrt(G * blackHole.mass / radius) / 8e5;
-				const vx = -speed * Math.sin(angle);
-				const vz = speed * Math.cos(angle);
-				particlesVelocities.push(vx, 0, vz);
-				
-				// Цвет в зависимости от расстояния - как у диска из "Интерстеллар"
-				let r, g, b;
-				
-				if (radius < 12) {
-					// Яркий белый/голубоватый ближе к горизонту событий
-					r = 1.0;
-					g = 1.0;
-					b = 1.0;
-				} else if (radius < 20) {
-					// Бело-желтый в средней части
-					r = 1.0;
-					g = 1.0 - (radius - 12) / 16 * 0.1;
-					b = 0.9 - (radius - 12) / 16 * 0.5;
-				} else {
-					// Янтарно-коричневый ближе к внешнему краю
-					r = 1.0 - (radius - 20) / 20 * 0.3;
-					g = 0.8 - (radius - 20) / 20 * 0.5;
-					b = 0.4 - (radius - 20) / 20 * 0.3;
-				}
-				
-				particlesColors.push(r, g, b);
-			}
-			
-			particlesGeometry.setAttribute('position', new THREE.Float32BufferAttribute(particlesVertices, 3));
-			particlesGeometry.setAttribute('color', new THREE.Float32BufferAttribute(particlesColors, 3));
-			
-			const particles = new THREE.Points(particlesGeometry, particlesMaterial);
-			particles.userData.velocities = particlesVelocities;
-			particles.userData.originalPositions = [...particlesVertices];
-			
-			scene.add(particles);
-			accretionDisk.particles = particles;
-		}
-        
-		
+        // 2. Увеличение яркости аккреционного диска
+        function createAccretionDisk() {
+            // Создаем группу для аккреционного диска
+            const diskGroup = new THREE.Group();
+            
+            // Создаем основной тонкий диск (как в фильме "Интерстеллар")
+            const diskGeometry = new THREE.RingGeometry(8, 40, 128, 2);
+            
+            // Создаем canvas для текстуры
+            const canvas = document.createElement('canvas');
+            canvas.width = 2048; // Увеличиваем разрешение для лучшего качества
+            canvas.height = 2;
+            const context = canvas.getContext('2d');
+            
+            // Создаем градиент в стиле "Интерстеллар" с увеличенной яркостью
+            const gradient = context.createLinearGradient(0, 0, canvas.width, 0);
+            gradient.addColorStop(0, '#ffffff'); // Яркий белый в центре
+            gradient.addColorStop(0.1, '#ffffff');
+            gradient.addColorStop(0.2, '#ffffcc');
+            gradient.addColorStop(0.4, '#ffdd88');
+            gradient.addColorStop(0.6, '#ffbb66');
+            gradient.addColorStop(0.8, '#dd8844');
+            gradient.addColorStop(1, '#884422');
+            
+            context.fillStyle = gradient;
+            context.fillRect(0, 0, canvas.width, canvas.height);
+            
+            const texture = new THREE.Texture(canvas);
+            texture.needsUpdate = true;
+            
+            const diskMaterial = new THREE.MeshBasicMaterial({
+                map: texture,
+                side: THREE.DoubleSide,
+                transparent: true,
+                opacity: 1.0, // Увеличиваем непрозрачность
+                blending: THREE.AdditiveBlending
+            });
+            
+            const diskRing = new THREE.Mesh(diskGeometry, diskMaterial);
+            diskRing.rotation.x = Math.PI / 2;
+            diskGroup.add(diskRing);
+            
+            // Добавляем второй внутренний яркий диск
+            const innerDiskGeometry = new THREE.RingGeometry(6, 12, 128, 2);
+            
+            const innerCanvas = document.createElement('canvas');
+            innerCanvas.width = 2048;
+            innerCanvas.height = 2;
+            const innerContext = innerCanvas.getContext('2d');
+            
+            const innerGradient = innerContext.createLinearGradient(0, 0, innerCanvas.width, 0);
+            innerGradient.addColorStop(0, '#ffffff');
+            innerGradient.addColorStop(0.7, '#ffffff');
+            innerGradient.addColorStop(1, '#ffffee');
+            
+            innerContext.fillStyle = innerGradient;
+            innerContext.fillRect(0, 0, innerCanvas.width, innerCanvas.height);
+            
+            const innerTexture = new THREE.Texture(innerCanvas);
+            innerTexture.needsUpdate = true;
+            
+            const innerDiskMaterial = new THREE.MeshBasicMaterial({
+                map: innerTexture,
+                side: THREE.DoubleSide,
+                transparent: true,
+                opacity: 1.0, // Максимальная непрозрачность
+                blending: THREE.AdditiveBlending
+            });
+            
+            const innerDiskRing = new THREE.Mesh(innerDiskGeometry, innerDiskMaterial);
+            innerDiskRing.rotation.x = Math.PI / 2;
+            diskGroup.add(innerDiskRing);
+            
+            // Добавляем третий, очень яркий внутренний диск для усиления эффекта
+            const brightInnerDiskGeometry = new THREE.RingGeometry(5.5, 8, 128, 2);
+            
+            const brightDiskMaterial = new THREE.MeshBasicMaterial({
+                color: 0xffffff,
+                side: THREE.DoubleSide,
+                transparent: true,
+                opacity: 1.0,
+                blending: THREE.AdditiveBlending
+            });
+            
+            const brightInnerDiskRing = new THREE.Mesh(brightInnerDiskGeometry, brightDiskMaterial);
+            brightInnerDiskRing.rotation.x = Math.PI / 2;
+            diskGroup.add(brightInnerDiskRing);
+            
+            // Создаем эффект свечения вокруг черной дыры (увеличиваем интенсивность)
+            const glowGeometry = new THREE.SphereGeometry(7, 32, 32);
+            const glowMaterial = new THREE.MeshBasicMaterial({
+                color: 0xffffff,
+                transparent: true,
+                opacity: 0.3, // Увеличиваем яркость свечения
+                side: THREE.BackSide,
+                blending: THREE.AdditiveBlending
+            });
+            
+            const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+            diskGroup.add(glow);
+            
+            // Добавляем световые эффекты для усиления яркости диска
+            const diskLight = new THREE.PointLight(0xffffcc, 2, 50);
+            diskLight.position.set(0, 0, 0);
+            diskGroup.add(diskLight);
+            
+            accretionDisk = diskGroup;
+            scene.add(accretionDisk);
+            
+            // Добавляем частицы для более реалистичного эффекта
+            createInterstellarAccretionParticles();
+        }
 
-		// 5. Создание улучшенной текстуры частиц
-		function createImprovedParticleTexture() {
-			const canvas = document.createElement('canvas');
-			canvas.width = 64;
-			canvas.height = 64;
-			const context = canvas.getContext('2d');
-			
-			// Чистый холст
-			context.clearRect(0, 0, canvas.width, canvas.height);
-			
-			// Мягкий градиент для частицы
-			const gradient = context.createRadialGradient(
-				canvas.width / 2, canvas.height / 2, 0,
-				canvas.width / 2, canvas.height / 2, canvas.width / 2
-			);
-			
-			gradient.addColorStop(0, 'rgba(255, 255, 255, 1.0)');
-			gradient.addColorStop(0.2, 'rgba(255, 255, 255, 0.8)');
-			gradient.addColorStop(0.5, 'rgba(255, 255, 255, 0.3)');
-			gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
-			
-			context.fillStyle = gradient;
-			context.fillRect(0, 0, canvas.width, canvas.height);
-			
-			const texture = new THREE.CanvasTexture(canvas);
-			return texture;
-		}
+        function createJetParticleTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 64;
+            canvas.height = 64;
+            const context = canvas.getContext('2d');
+            
+            context.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Градиент для частиц джета (голубоватый)
+            const gradient = context.createRadialGradient(
+                canvas.width / 2, canvas.height / 2, 0,
+                canvas.width / 2, canvas.height / 2, canvas.width / 2
+            );
+            
+            gradient.addColorStop(0, 'rgba(150, 230, 255, 1.0)');
+            gradient.addColorStop(0.3, 'rgba(100, 200, 255, 0.8)');
+            gradient.addColorStop(0.7, 'rgba(50, 150, 255, 0.3)');
+            gradient.addColorStop(1, 'rgba(0, 100, 255, 0)');
+            
+            context.fillStyle = gradient;
+            context.fillRect(0, 0, canvas.width, canvas.height);
+            
+            const texture = new THREE.CanvasTexture(canvas);
+            return texture;
+        }
+
+        // 12. Создание частиц для джетов
+        function createJetParticles(jet, isUp) {
+            const particlesGeometry = new THREE.BufferGeometry();
+            
+            // Создаем текстуру для частиц джета (голубоватые)
+            const jetParticleTexture = createJetParticleTexture();
+            
+            const particlesMaterial = new THREE.PointsMaterial({
+                size: 0.4,
+                map: jetParticleTexture,
+                transparent: true,
+                opacity: 0.8,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false
+            });
+            
+            const particleCount = 1000;
+            const positions = new Float32Array(particleCount * 3);
+            const velocities = new Float32Array(particleCount * 3);
+            const lifetimes = new Float32Array(particleCount);
+            
+            // Инициализируем частицы
+            for (let i = 0; i < particleCount; i++) {
+                const i3 = i * 3;
+                
+                // Распределяем начальные позиции частиц в цилиндре
+                const angle = Math.random() * Math.PI * 2;
+                const radius = Math.random() * 0.5;
+                const height = Math.random() * 70;
+                
+                positions[i3] = Math.cos(angle) * radius;
+                positions[i3+1] = isUp ? height : -height;
+                positions[i3+2] = Math.sin(angle) * radius;
+                
+                // Скорость - преимущественно вверх/вниз с небольшим разбросом
+                const speed = 1 + Math.random() * 5;
+                velocities[i3] = (Math.random() - 0.5) * 0.1;
+                velocities[i3+1] = isUp ? speed : -speed;
+                velocities[i3+2] = (Math.random() - 0.5) * 0.1;
+                
+                // Случайное время жизни
+                lifetimes[i] = Math.random();
+            }
+            
+            particlesGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            
+            const particles = new THREE.Points(particlesGeometry, particlesMaterial);
+            particles.userData.velocities = velocities;
+            particles.userData.lifetimes = lifetimes;
+            particles.userData.isUp = isUp;
+            
+            jet.add(particles);
+            jet.particles = particles;
+            
+            return particles;
+        }
+
+
+        function createRelativisticJets() {
+            // Создаем геометрию для джетов
+            const jetLength = 100;
+            const jetGeometry = new THREE.CylinderGeometry(0, 3, jetLength, 32, 1, true);
+            
+            // Материал для джета с градиентом
+            const jetCanvas = document.createElement('canvas');
+            jetCanvas.width = 256;
+            jetCanvas.height = 1;
+            const jetContext = jetCanvas.getContext('2d');
+            
+            // Создаем градиент от синего к прозрачному
+            const jetGradient = jetContext.createLinearGradient(0, 0, jetCanvas.width, 0);
+            jetGradient.addColorStop(0, 'rgba(100, 200, 255, 1.0)');
+            jetGradient.addColorStop(0.5, 'rgba(80, 160, 255, 0.7)');
+            jetGradient.addColorStop(1, 'rgba(50, 100, 255, 0.0)');
+            
+            jetContext.fillStyle = jetGradient;
+            jetContext.fillRect(0, 0, jetCanvas.width, jetCanvas.height);
+            
+            const jetTexture = new THREE.CanvasTexture(jetCanvas);
+            jetTexture.needsUpdate = true;
+            
+            const jetMaterial = new THREE.MeshBasicMaterial({
+                map: jetTexture,
+                transparent: true,
+                opacity: 0.6,
+                blending: THREE.AdditiveBlending,
+                side: THREE.DoubleSide
+            });
+            
+            // Верхний джет
+            const topJet = new THREE.Mesh(jetGeometry, jetMaterial);
+            topJet.position.set(0, jetLength / 2, 0);
+            topJet.rotation.x = Math.PI;
+            blackHole.add(topJet);
+            
+            // Нижний джет
+            const bottomJet = new THREE.Mesh(jetGeometry, jetMaterial);
+            bottomJet.position.set(0, -jetLength / 2, 0);
+            blackHole.add(bottomJet);
+            
+            // Добавляем частицы для джетов
+            createJetParticles(topJet, true);
+            createJetParticles(bottomJet, false);
+            
+            // Добавляем световые эффекты
+            const topLight = new THREE.PointLight(0x4488ff, 1, 50);
+            topLight.position.set(0, 10, 0);
+            topJet.add(topLight);
+            
+            const bottomLight = new THREE.PointLight(0x4488ff, 1, 50);
+            bottomLight.position.set(0, -10, 0);
+            bottomJet.add(bottomLight);
+            
+            return [topJet, bottomJet];
+        }
+		
+        // 3. Улучшение функции для создания частиц аккреционного диска (больше и ярче)
+        function createInterstellarAccretionParticles() {
+            const particlesGeometry = new THREE.BufferGeometry();
+            
+            // Создаем текстуру частицы
+            const particleTexture = createImprovedParticleTexture();
+            
+            const particlesMaterial = new THREE.PointsMaterial({
+                size: 0.6, // Увеличиваем размер частиц
+                map: particleTexture,
+                transparent: true,
+                opacity: 0.9, // Увеличиваем непрозрачность для большей яркости
+                vertexColors: true,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false
+            });
+            
+            const particleCount = 30000; // Увеличиваем количество частиц
+            const particlesVertices = [];
+            const particlesVelocities = [];
+            const particlesColors = [];
+            const particlesLifetimes = []; // Добавляем массив времени жизни
+            
+            for (let i = 0; i < particleCount; i++) {
+                // Распределяем частицы в тонком плоском диске
+                let radius, angle, height;
+                
+                // 70% частиц концентрируем в основном диске
+                if (i < particleCount * 0.7) {
+                    radius = 8 + Math.pow(Math.random(), 0.5) * 32;
+                    angle = Math.random() * Math.PI * 2;
+                    // Очень тонкий диск, как в фильме
+                    height = (Math.random() - 0.5) * 0.3;
+                } else {
+                    // 30% частиц размещаем в более широкой области для создания размытия
+                    radius = 8 + Math.random() * 32;
+                    angle = Math.random() * Math.PI * 2;
+                    // Более широкое распределение
+                    height = (Math.random() - 0.5) * 2;
+                }
+                
+                const x = radius * Math.cos(angle);
+                const y = height;
+                const z = radius * Math.sin(angle);
+                
+                particlesVertices.push(x, y, z);
+                
+                // Скорость - кеплеровская орбита
+                const speed = Math.sqrt(G * blackHole.mass / radius) / 8e5;
+                const vx = -speed * Math.sin(angle);
+                const vz = speed * Math.cos(angle);
+                particlesVelocities.push(vx, 0, vz);
+                
+                // Добавляем время жизни
+                particlesLifetimes.push(Math.random());
+                
+                // Цвет в зависимости от расстояния - как у диска из "Интерстеллар", но ярче
+                let r, g, b;
+                
+                if (radius < 12) {
+                    // Яркий белый/голубоватый ближе к горизонту событий
+                    r = 1.0;
+                    g = 1.0;
+                    b = 1.0;
+                } else if (radius < 20) {
+                    // Бело-желтый в средней части
+                    r = 1.0;
+                    g = 1.0;
+                    b = 0.9 - (radius - 12) / 16 * 0.5;
+                } else {
+                    // Янтарно-коричневый ближе к внешнему краю
+                    r = 1.0;
+                    g = 0.9 - (radius - 20) / 20 * 0.4;
+                    b = 0.4 - (radius - 20) / 20 * 0.3;
+                }
+                
+                particlesColors.push(r, g, b);
+            }
+            
+            particlesGeometry.setAttribute('position', new THREE.Float32BufferAttribute(particlesVertices, 3));
+            particlesGeometry.setAttribute('color', new THREE.Float32BufferAttribute(particlesColors, 3));
+            
+            const particles = new THREE.Points(particlesGeometry, particlesMaterial);
+            particles.userData.velocities = particlesVelocities;
+            particles.userData.originalPositions = [...particlesVertices];
+            particles.userData.lifetimes = particlesLifetimes;
+            
+            scene.add(particles);
+            accretionDisk.particles = particles;
+        }
+                
+        // 5. Создание улучшенной текстуры частиц
+        function createImprovedParticleTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 128; // Увеличиваем размер для большей детализации
+            canvas.height = 128;
+            const context = canvas.getContext('2d');
+            
+            // Чистый холст
+            context.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Более яркий градиент для частицы с более плавными переходами
+            const gradient = context.createRadialGradient(
+                canvas.width / 2, canvas.height / 2, 0,
+                canvas.width / 2, canvas.height / 2, canvas.width / 2
+            );
+            
+            gradient.addColorStop(0, 'rgba(255, 255, 255, 1.0)');
+            gradient.addColorStop(0.3, 'rgba(255, 255, 255, 0.9)'); // Увеличиваем непрозрачность
+            gradient.addColorStop(0.6, 'rgba(255, 255, 255, 0.5)'); // Увеличиваем непрозрачность
+            gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+            
+            context.fillStyle = gradient;
+            context.fillRect(0, 0, canvas.width, canvas.height);
+            
+            const texture = new THREE.CanvasTexture(canvas);
+            return texture;
+        }
 
 
 		// 6. Обновление частиц аккреционного диска
@@ -891,7 +1135,25 @@
 			const positions = particles.geometry.attributes.position.array;
 			const velocities = particles.userData.velocities;
 			
+			    // Проверяем наличие lifetimes и инициализируем при необходимости
+			if (!particles.userData.lifetimes) {
+				particles.userData.lifetimes = Array(positions.length / 3).fill(0).map(() => Math.random());
+			}
+			const lifetimes = particles.userData.lifetimes;
+			
+			// Проверяем наличие originalPositions и инициализируем при необходимости
+			if (!particles.userData.originalPositions) {
+				particles.userData.originalPositions = [...positions];
+			}
+			const originalPositions = particles.userData.originalPositions;
+			
 			for (let i = 0; i < positions.length; i += 3) {
+			
+			     const i3 = i * 3;
+        
+				// Обновляем время жизни частицы
+				lifetimes[i] += 0.001 * delta * simulationSpeed;
+				if (lifetimes[i] > 1) lifetimes[i] = 0;
 				// Обновление позиций частиц с учетом скорости симуляции
 				positions[i] += velocities[i/3*3] * delta * simulationSpeed * 10;
 				positions[i+2] += velocities[i/3*3+2] * delta * simulationSpeed * 10;
@@ -1311,6 +1573,7 @@
                 const positions = donorStar.streamParticles.geometry.attributes.position.array;
                 const velocities = donorStar.streamParticles.userData.velocities;
                 const lifetimes = donorStar.streamParticles.userData.lifetimes;
+                const sizes = donorStar.streamParticles.userData.sizes;
                 
                 for (let i = 0; i < lifetimes.length; i++) {
                     const i3 = i * 3;
@@ -1334,7 +1597,7 @@
                     if (distToBH < 5 || lifetimes[i] >= 1.0) {
                         updateStreamParticle(i, positions, velocities, lifetimes);
                     } else {
-                        // Гравитационное ускорение по направлению к черной дыре
+                        // Гравитационное ускорение по направлению к черной дыре (усилено)
                         const dx = blackHole.position.x - positions[i3];
                         const dy = blackHole.position.y - positions[i3+1];
                         const dz = blackHole.position.z - positions[i3+2];
@@ -1342,16 +1605,55 @@
                         const distToBHCubed = Math.pow(distToBH, 3);
                         
                         // Увеличиваем скорость под действием гравитации
-                        const accelFactor = scaledDelta * 0.002 * blackHole.mass / distToBHCubed;
+                        // Усиливаем эффект для создания более драматичного искривления
+                        const accelFactor = scaledDelta * 0.005 * blackHole.mass / distToBHCubed;
                         velocities[i3] += dx * accelFactor;
                         velocities[i3+1] += dy * accelFactor;
                         velocities[i3+2] += dz * accelFactor;
+                        
+                        // Уменьшаем скорость частиц с течением времени для эффекта растяжения
+                        if (distToBH < 15) {
+                            const speedFactor = 1.0 + (15 - distToBH) / 15 * 0.5;
+                            velocities[i3] *= speedFactor;
+                            velocities[i3+1] *= speedFactor;
+                            velocities[i3+2] *= speedFactor;
+                        }
                     }
                 }
-                
-                donorStar.streamParticles.geometry.attributes.position.needsUpdate = true;
-            }
             
+            // Обновляем размеры частиц (увеличиваем ближе к черной дыре для эффекта растяжения)
+            if (donorStar.streamParticles.geometry.attributes.size) {
+                const sizeAttr = donorStar.streamParticles.geometry.attributes.size;
+                for (let i = 0; i < sizeAttr.array.length; i++) {
+                    const i3 = i * 3;
+                    const distToBH = Math.sqrt(
+                        Math.pow(positions[i3] - blackHole.position.x, 2) +
+                        Math.pow(positions[i3+1] - blackHole.position.y, 2) +
+                        Math.pow(positions[i3+2] - blackHole.position.z, 2)
+                    );
+                    
+                    if (distToBH < 20) {
+                        // Увеличиваем размер ближе к черной дыре для эффекта растяжения
+                        sizeAttr.array[i] = sizes[i] * (1.0 + (20 - distToBH) / 20 * 2.0);
+                    } else {
+                        sizeAttr.array[i] = sizes[i];
+                    }
+                }
+                sizeAttr.needsUpdate = true;
+            }
+
+            donorStar.streamParticles.geometry.attributes.position.needsUpdate = true;
+    
+            // Обновляем путь потока вещества с учетом новых позиций донора и черной дыры
+            if (donorStar.streamPath) {
+                scene.remove(donorStar.streamPath);
+                const newPathGeometry = createStreamPathGeometry(donorStar.position, blackHole.position);
+                const pathMaterial = donorStar.streamPath.material;
+                const newPath = new THREE.Mesh(newPathGeometry, pathMaterial);
+                scene.add(newPath);
+                donorStar.streamPath = newPath;
+            }
+
             // Обновление частиц аккреционного диска
             if (showAccretionDisk && accretionDisk.particles) {
                 const positions = accretionDisk.particles.geometry.attributes.position.array;
@@ -1496,102 +1798,121 @@
 				if (window.lensingEffect) window.lensingEffect.visible = false;
 			}
 		}
-        // Обновление камеры
-		function updateCamera(delta) {
-			if (cameraMode === 'orbit') {
-				// Орбитальная камера вокруг черной дыры
-				const time = Date.now() * 0.0003;
-				const radius = 120;
-				camera.position.x = Math.cos(time) * radius;
-				camera.position.z = Math.sin(time) * radius;
-				camera.position.y = 30 + Math.sin(time * 0.5) * 20;
-				camera.lookAt(0, 0, 0);
-			} else if (cameraMode === 'follow') {
-				// Камера следует за выбранной планетой или звездой
-				let target;
-				if (followIndex === planets.length) {
-					target = star;
-				} else if (followIndex === planets.length + 1) {
-					target = donorStar;
-				} else {
-					target = planets[followIndex];
-				}
-				
-				// Стабилизируем движение камеры с использованием интерполяции
-				// Вместо мгновенного перемещения, делаем плавный переход
-				const cameraTargetPosition = new THREE.Vector3();
-				const offset = new THREE.Vector3(15, 8, 15); // Увеличиваем отступ для более стабильного вида
-				
-				// Целевая позиция камеры
-				cameraTargetPosition.set(
-					target.position.x + offset.x,
-					target.position.y + offset.y,
-					target.position.z + offset.z
-				);
-				
-				// Плавно перемещаем камеру к целевой позиции
-				// Более медленное движение при высоком значении делителя
-				const lerpFactor = Math.min(1, 2 * delta * simulationSpeed);
-				camera.position.lerp(cameraTargetPosition, lerpFactor);
-				
-				// Плавно поворачиваем камеру
-				const lookTarget = new THREE.Vector3();
-				if (followIndex < planets.length) {
-					// Если следуем за планетой, смотрим на звезду
-					lookTarget.copy(star.position);
-				} else {
-					// Если следуем за звездой, смотрим на черную дыру со смещением
-					lookTarget.copy(blackHole.position).add(new THREE.Vector3(0, 2, 0));
-				}
-				
-				// Создаем точку для плавного перемещения взгляда
-				if (!camera.userData.currentLookTarget) {
-					camera.userData.currentLookTarget = lookTarget.clone();
-				} else {
-					camera.userData.currentLookTarget.lerp(lookTarget, lerpFactor);
-				}
-				
-				camera.lookAt(camera.userData.currentLookTarget);
-			} else if (cameraMode === 'blackhole') {
-				// Вид от черной дыры, смотрим на звезду с небольшими вариациями для живости
-				const time = Date.now() * 0.0001;
-				const posOffset = new THREE.Vector3(
-					Math.sin(time * 0.5) * 0.5,
-					3 + Math.sin(time * 0.3) * 0.3,
-					Math.cos(time * 0.5) * 0.5
-				);
-				
-				camera.position.copy(blackHole.position).add(posOffset);
-				camera.lookAt(star.position);
-			} else if (cameraMode === 'dramatic') {
-				// Драматический вид сбоку от системы с плавным движением
-				const time = Date.now() * 0.0001;
-				const radius = 150;
-				camera.position.set(
-					Math.cos(time) * radius,
-					10 + Math.sin(time * 0.5) * 8, // Более плавная вертикальная амплитуда
-					Math.sin(time) * radius / 2
-				);
-				
-				// Смотрим на область между черной дырой и звездами с плавными изменениями
-				const lookTarget = new THREE.Vector3(
-					(blackHole.position.x + star.position.x) / 3 + Math.sin(time * 0.7) * 5,
-					Math.sin(time * 0.3) * 3,
-					(blackHole.position.z + star.position.z) / 3 + Math.cos(time * 0.7) * 5
-				);
-				camera.lookAt(lookTarget);
-			}
-			
-			// Добавляем небольшую тряску камеры при близости к черной дыре
-			// но делаем её более тонкой и зависящей от скорости симуляции
-			if (camera.position.distanceTo(blackHole.position) < 30) {
-				const shakeIntensity = (30 - camera.position.distanceTo(blackHole.position)) / 30 * 0.05 * simulationSpeed;
-				camera.position.x += (Math.random() - 0.5) * shakeIntensity;
-				camera.position.y += (Math.random() - 0.5) * shakeIntensity;
-				camera.position.z += (Math.random() - 0.5) * shakeIntensity;
-			}
-		}
-        
+        function updateCamera(delta) {
+            if (cameraMode === 'orbit') {
+                // Орбитальная камера вокруг черной дыры
+                const time = Date.now() * 0.0003;
+                const radius = 120;
+                camera.position.x = Math.cos(time) * radius;
+                camera.position.z = Math.sin(time) * radius;
+                camera.position.y = 30 + Math.sin(time * 0.5) * 20;
+                camera.lookAt(0, 0, 0);
+            } else if (cameraMode === 'follow') {
+                // Камера следует за выбранной планетой или звездой
+                let target;
+                if (followIndex === planets.length) {
+                    target = star;
+                } else if (followIndex === planets.length + 1) {
+                    target = donorStar;
+                } else if (followIndex < planets.length) {
+                    target = planets[followIndex];
+                } else {
+                    // В случае неверного индекса возвращаемся к орбитальному виду
+                    cameraMode = 'orbit';
+                    return;
+                }
+                
+                // Инициализируем userData для камеры, если необходимо
+                if (!camera.userData) camera.userData = {};
+                
+                // Фиксированное положение камеры относительно объекта - немного позади и сбоку
+                // Создаем более стабильную позицию, учитывающую размер объекта
+                let offsetDistance = 10;
+                if (target === star || target === donorStar) {
+                    offsetDistance = target.geometry.parameters.radius * 3;
+                } else {
+                    offsetDistance = target.geometry.parameters.radius * 8;
+                }
+                
+                // Создаем смещение в локальной системе координат объекта 
+                // (позиция камеры будет "следовать" за объектом и его вращением)
+                const offsetX = -offsetDistance * 0.7; // позади
+                const offsetY = offsetDistance * 0.5;  // немного выше
+                const offsetZ = offsetDistance * 0.7;  // сбоку
+                
+                // Целевая позиция для камеры
+                const targetPosition = new THREE.Vector3(
+                    target.position.x + offsetX,
+                    target.position.y + offsetY,
+                    target.position.z + offsetZ
+                );
+                
+                // Плавное перемещение к целевой позиции (интерполяция)
+                const lerpFactor = Math.min(0.2, delta * 2); // Ограничиваем скорость смещения
+                if (!camera.userData.previousPosition) {
+                    camera.userData.previousPosition = targetPosition.clone();
+                }
+                
+                camera.userData.previousPosition.lerp(targetPosition, lerpFactor);
+                camera.position.copy(camera.userData.previousPosition);
+                
+                // Определяем, на что смотрит камера
+                let lookAtTarget;
+                if (followIndex < planets.length) {
+                    // Если следим за планетой, смотрим на саму планету (чтобы она была в кадре)
+                    lookAtTarget = target.position.clone();
+                } else {
+                    // Для звезд смотрим на черную дыру
+                    lookAtTarget = blackHole.position.clone();
+                }
+                
+                // Плавный поворот камеры к целевой точке
+                if (!camera.userData.lookAtTarget) {
+                    camera.userData.lookAtTarget = lookAtTarget.clone();
+                } else {
+                    camera.userData.lookAtTarget.lerp(lookAtTarget, lerpFactor);
+                }
+                
+                camera.lookAt(camera.userData.lookAtTarget);
+            } else if (cameraMode === 'blackhole') {
+                // Вид от черной дыры, смотрим на звезду с небольшими вариациями для живости
+                const time = Date.now() * 0.0001;
+                const posOffset = new THREE.Vector3(
+                    Math.sin(time * 0.5) * 0.5,
+                    3 + Math.sin(time * 0.3) * 0.3,
+                    Math.cos(time * 0.5) * 0.5
+                );
+                
+                camera.position.copy(blackHole.position).add(posOffset);
+                camera.lookAt(star.position);
+            } else if (cameraMode === 'dramatic') {
+                // Драматический вид сбоку от системы с плавным движением
+                const time = Date.now() * 0.0001;
+                const radius = 150;
+                camera.position.set(
+                    Math.cos(time) * radius,
+                    10 + Math.sin(time * 0.5) * 8, // Более плавная вертикальная амплитуда
+                    Math.sin(time) * radius / 2
+                );
+                
+                // Смотрим на область между черной дырой и звездами с плавными изменениями
+                const lookTarget = new THREE.Vector3(
+                    (blackHole.position.x + star.position.x) / 3 + Math.sin(time * 0.7) * 5,
+                    Math.sin(time * 0.3) * 3,
+                    (blackHole.position.z + star.position.z) / 3 + Math.cos(time * 0.7) * 5
+                );
+                camera.lookAt(lookTarget);
+            }
+            
+            // Добавляем небольшую тряску камеры при близости к черной дыре
+            // но делаем её более тонкой и зависящей от скорости симуляции
+            if (camera.position.distanceTo(blackHole.position) < 30) {
+                const shakeIntensity = (30 - camera.position.distanceTo(blackHole.position)) / 30 * 0.05 * simulationSpeed;
+                camera.position.x += (Math.random() - 0.5) * shakeIntensity;
+                camera.position.y += (Math.random() - 0.5) * shakeIntensity;
+                camera.position.z += (Math.random() - 0.5) * shakeIntensity;
+            }
+        }
         // Обработчик изменения размеров окна
         function onWindowResize() {
             camera.aspect = window.innerWidth / window.innerHeight;
@@ -1651,16 +1972,22 @@
                 showAccretionDisk ? "Выключить аккреционный диск" : "Включить аккреционный диск";
         }
         
-        // Переключение эффекта гравитационного линзирования
         function toggleGravitationalLensing() {
             showGravitationalLensing = !showGravitationalLensing;
+            
+            // Показываем или скрываем джеты в зависимости от настройки линзирования
+            if (blackHole && blackHole.jets) {
+                blackHole.jets.forEach(jet => {
+                    jet.visible = !showGravitationalLensing;
+                });
+            }
+            
             updateGravitationalLensing();
             
             // Обновляем текст на кнопке для лучшего UX
             document.getElementById('toggleGravitationalLensing').textContent = 
                 showGravitationalLensing ? "Выключить гравитационное линзирование" : "Включить гравитационное линзирование";
         }
-        
         // Создание событий для добавления драматизма в симуляцию
         function scheduleEvents() {
             // Планируем случайные события
@@ -1765,6 +2092,72 @@
 			
 			particles.geometry.attributes.position.needsUpdate = true;
 		}
+
+        function createDiskFlash() {
+            if (!accretionDisk) return;
+            
+            // Случайная позиция на диске
+            const angle = Math.random() * Math.PI * 2;
+            const radius = 8 + Math.random() * 30;
+            const x = Math.cos(angle) * radius;
+            const z = Math.sin(angle) * radius;
+            
+            // Создаем вспышку как световой источник
+            const flashLight = new THREE.PointLight(0xffffcc, 2 + Math.random() * 3, 10 + Math.random() * 10);
+            flashLight.position.set(x, Math.random() * 0.3, z);
+            scene.add(flashLight);
+            
+            // Создаем визуализацию вспышки
+            const flashGeometry = new THREE.SphereGeometry(0.5 + Math.random() * 0.5, 16, 16);
+            const flashMaterial = new THREE.MeshBasicMaterial({
+                color: 0xffffee,
+                transparent: true,
+                opacity: 0.8,
+                blending: THREE.AdditiveBlending
+            });
+            
+            const flash = new THREE.Mesh(flashGeometry, flashMaterial);
+            flash.position.copy(flashLight.position);
+            scene.add(flash);
+            
+            // Длительность вспышки
+            const duration = 300 + Math.random() * 400;
+            
+            // Удаляем вспышку после окончания
+            setTimeout(() => {
+                scene.remove(flashLight);
+                scene.remove(flash);
+            }, duration);
+        }
+
+        function updateSimulationEffects(delta) {
+            // Обновление эффектов аккреционного диска
+            if (showAccretionDisk && accretionDisk) {
+                // Пульсация яркости аккреционного диска для большей реалистичности
+                const time = Date.now() * 0.0005;
+                const pulseFactor = 1 + Math.sin(time) * 0.1;
+                
+                // Найдем световой источник в аккреционном диске
+                accretionDisk.children.forEach(child => {
+                    if (child instanceof THREE.PointLight) {
+                        child.intensity = 2 + Math.sin(time * 1.5) * 0.5;
+                    }
+                });
+                
+                // Случайные вспышки на аккреционном диске
+                if (Math.random() < 0.02 * delta * simulationSpeed) {
+                    createDiskFlash();
+                }
+            }
+            
+            // Обновление потока вещества от звезды-донора
+            if (donorStar && donorStar.streamPath) {
+                const time = Date.now() * 0.0003;
+                // Пульсация яркости потока вещества
+                const opacity = 0.2 + Math.sin(time) * 0.05;
+                donorStar.streamPath.material.opacity = opacity;
+            }
+        }
         
         // Создание выброса вещества из аккреционного диска
         function createDiskEjection() {
@@ -1879,12 +2272,12 @@
             
             // Обновление эффектов
             updateGravitationalLensing();
-            
-            // Обновление джетов черной дыры
-            if (blackHole.children.length >= 4) {
-                updateJetParticles(blackHole.children[2], delta);
-                updateJetParticles(blackHole.children[3], delta);
-            }
+            updateJetParticles(delta);
+            // // Обновление джетов черной дыры
+            // if (blackHole && blackHole.children && blackHole.children.length >= 4) {
+            //     updateJetParticles(blackHole.children[2], delta);
+            //     updateJetParticles(blackHole.children[3], delta);
+            // }
             
             // Обновление выбросов из аккреционного диска
             if (window.ejections && window.ejections.length > 0) {
@@ -1895,7 +2288,7 @@
             updateCamera(delta);
             
             // Вращение аккреционного диска
-            if (showAccretionDisk) {
+            if (showAccretionDisk && accretionDisk && accretionDisk.children && accretionDisk.children.length > 0) {
                 accretionDisk.children.forEach((ring, index) => {
                     // Внутренние кольца вращаются быстрее
                     const rotationSpeed = 0.002 * simulationSpeed / (index + 1);
@@ -1952,7 +2345,7 @@
 			if (showAccretionDisk && accretionDisk.particles) {
 				updateAccretionDiskParticles(delta);
 			}
-			
+			updateSimulationEffects(delta);
             renderer.render(scene, camera);
         }
         
