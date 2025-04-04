@@ -1,0 +1,1668 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Звездная система возле черной дыры</title>
+    <style>
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            background-color: #000;
+        }
+        canvas { 
+            display: block; 
+        }
+        #info {
+            position: absolute;
+            top: 10px;
+            width: 100%;
+            text-align: center;
+            color: white;
+            font-family: Arial, sans-serif;
+            pointer-events: none;
+            z-index: 100;
+        }
+        #controls {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            color: white;
+            font-family: Arial, sans-serif;
+            background-color: rgba(0,0,0,0.5);
+            padding: 10px;
+            border-radius: 5px;
+        }
+        button {
+            margin: 5px;
+            padding: 5px 10px;
+            background-color: #444;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">Симуляция звездной системы возле черной дыры</div>
+    <div id="controls">
+        <button id="toggleCamera">Сменить режим камеры</button>
+        <button id="toggleAccretionDisk">Вкл/выкл аккреционный диск</button>
+        <button id="toggleGravitationalLensing">Вкл/выкл гравитационное линзирование</button>
+        <div style="margin-top: 10px;">
+            <label for="simulationSpeed" style="color: white; display: block; margin-bottom: 5px;">Скорость симуляции: <span id="speedValue">1.0</span>x</label>
+            <input type="range" id="simulationSpeed" min="0.1" max="5" step="0.1" value="1" style="width: 100%;">
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/simplex-noise/2.4.0/simplex-noise.min.js"></script>
+    <script>
+        // Константы
+        const G = 6.67430e-11; // Гравитационная постоянная
+        const C = 299792458; // Скорость света
+        const SCALE = 1e9; // Масштабный коэффициент для визуализации
+
+        // Основные переменные
+        let scene, camera, renderer;
+        let blackHole, accretionDisk, star, donorStar, planets = [];
+        let cameraMode = 'orbit'; // 'orbit' или 'follow'
+        let followIndex = 0;
+        let showAccretionDisk = true;
+        let showGravitationalLensing = true;
+        let clock = new THREE.Clock();
+        let simulationSpeed = 1.0;
+        let particleSystem, particleCount = 10000;
+        let noiseGenerator = new SimplexNoise();
+        
+        // Инициализация
+        function init() {
+            // Создание сцены
+            scene = new THREE.Scene();
+            
+            // Создание камеры
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 10000);
+            camera.position.set(0, 50, 100);
+            camera.lookAt(0, 0, 0);
+            
+            // Создание рендерера
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            document.body.appendChild(renderer.domElement);
+            
+            // Добавление звезд на фоне
+            createStarfield();
+            
+            // Создание черной дыры
+            createBlackHole();
+            
+            // Создание аккреционного диска
+            createAccretionDisk();
+            
+            // Создание звезды
+            createStar();
+            
+            // Создание планет
+            createPlanets();
+            
+            // Создание послесвечения
+            createPostProcessing();
+            
+            // Обработчики событий
+            window.addEventListener('resize', onWindowResize);
+            document.getElementById('toggleCamera').addEventListener('click', toggleCameraMode);
+            document.getElementById('toggleAccretionDisk').addEventListener('click', toggleAccretionDisk);
+            document.getElementById('toggleGravitationalLensing').addEventListener('click', toggleGravitationalLensing);
+            
+            // Обработчик изменения скорости симуляции
+            const speedSlider = document.getElementById('simulationSpeed');
+            const speedValue = document.getElementById('speedValue');
+            speedSlider.addEventListener('input', function() {
+                simulationSpeed = parseFloat(this.value);
+                speedValue.textContent = simulationSpeed.toFixed(1);
+            });
+            
+            // Инициализация информации о камере
+            document.getElementById('info').textContent = getCameraInfo();
+            
+            // Запуск анимации
+            animate();
+        }
+        
+        // Создание послесвечения и эффектов
+        function createPostProcessing() {
+            // В этой версии Three.js мы используем простые решения для визуальных эффектов
+            // В полноценном проекте можно было бы использовать шейдеры и EffectComposer
+            
+            // Добавляем подсветку черной дыры
+            const blackHoleLight = new THREE.PointLight(0x0066ff, 0.8, 50);
+            blackHoleLight.position.set(0, 0, 0);
+            scene.add(blackHoleLight);
+            
+            // Усиливаем свет от звезды
+            const starLight = new THREE.PointLight(0xffffaa, 1.2, 150);
+            starLight.position.copy(star.position);
+            scene.add(starLight);
+            
+            // Добавляем рассеянный свет для общего освещения сцены
+            const ambientLight = new THREE.AmbientLight(0x111111);
+            scene.add(ambientLight);
+        }
+        
+        // Создание звездного поля на фоне
+        function createStarfield() {
+            // Создаем несколько слоев звезд для эффекта глубины
+            createStarLayer(10000, 0.2, 2000); // Дальние звезды
+            createStarLayer(5000, 0.4, 1000);  // Средние звезды
+            createStarLayer(1000, 0.6, 500);   // Близкие яркие звезды
+            
+            // Создаем несколько туманностей
+            createNebula(1000, 200, 200, 0x4466aa, 0.15);
+            createNebula(-800, -300, -500, 0xaa6644, 0.1);
+            createNebula(600, -200, -800, 0x66aa77, 0.12);
+        }
+        
+        // Создание слоя звезд
+        function createStarLayer(count, size, distance) {
+            const starsGeometry = new THREE.BufferGeometry();
+            const starsMaterial = new THREE.PointsMaterial({
+                color: 0xffffff,
+                size: size,
+                transparent: true,
+                opacity: 0.8
+            });
+            
+            const starsVertices = [];
+            const starsColors = [];
+            
+            for (let i = 0; i < count; i++) {
+                const x = (Math.random() - 0.5) * distance * 2;
+                const y = (Math.random() - 0.5) * distance * 2;
+                const z = (Math.random() - 0.5) * distance * 2;
+                starsVertices.push(x, y, z);
+                
+                // Добавляем случайные цвета звезд
+                let r, g, b;
+                const colorType = Math.random();
+                
+                if (colorType < 0.6) {
+                    // Белые и голубоватые звезды (наиболее распространенные)
+                    r = 0.8 + Math.random() * 0.2;
+                    g = 0.8 + Math.random() * 0.2;
+                    b = 0.9 + Math.random() * 0.1;
+                } else if (colorType < 0.8) {
+                    // Красноватые звезды
+                    r = 0.9 + Math.random() * 0.1;
+                    g = 0.6 + Math.random() * 0.3;
+                    b = 0.6 + Math.random() * 0.2;
+                } else if (colorType < 0.95) {
+                    // Желтоватые звезды
+                    r = 0.9 + Math.random() * 0.1;
+                    g = 0.9 + Math.random() * 0.1;
+                    b = 0.5 + Math.random() * 0.3;
+                } else {
+                    // Редкие голубые гиганты
+                    r = 0.5 + Math.random() * 0.3;
+                    g = 0.7 + Math.random() * 0.3;
+                    b = 0.9 + Math.random() * 0.1;
+                }
+                
+                starsColors.push(r, g, b);
+            }
+            
+            starsGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starsVertices, 3));
+            starsGeometry.setAttribute('color', new THREE.Float32BufferAttribute(starsColors, 3));
+            
+            starsMaterial.vertexColors = true;
+            
+            const stars = new THREE.Points(starsGeometry, starsMaterial);
+            scene.add(stars);
+        }
+        
+        // Создание туманности
+        function createNebula(x, y, z, color, opacity) {
+            // Используем частицы для создания облакоподобной туманности
+            const particlesCount = 1000;
+            const particlesGeometry = new THREE.BufferGeometry();
+            const particlesMaterial = new THREE.PointsMaterial({
+                color: color,
+                size: 5,
+                transparent: true,
+                opacity: opacity,
+                blending: THREE.AdditiveBlending
+            });
+            
+            const positions = new Float32Array(particlesCount * 3);
+            const sizes = new Float32Array(particlesCount);
+            
+            const nebulaCenterX = x;
+            const nebulaCenterY = y;
+            const nebulaCenterZ = z;
+            const nebulaSize = 300;
+            
+            for (let i = 0; i < particlesCount; i++) {
+                const i3 = i * 3;
+                
+                // Случайное распределение внутри эллипсоида
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.random() * Math.PI;
+                const r = Math.random() * nebulaSize;
+                
+                positions[i3] = nebulaCenterX + r * Math.sin(phi) * Math.cos(theta);
+                positions[i3+1] = nebulaCenterY + r * 0.6 * Math.sin(phi) * Math.sin(theta);
+                positions[i3+2] = nebulaCenterZ + r * 0.8 * Math.cos(phi);
+                
+                sizes[i] = 2 + Math.random() * 4;
+            }
+            
+            particlesGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            particlesGeometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+            
+            const particles = new THREE.Points(particlesGeometry, particlesMaterial);
+            scene.add(particles);
+        }
+        
+        // Создание черной дыры
+        function createBlackHole() {
+            // Создаем сферу для представления горизонта событий
+            const blackHoleGeometry = new THREE.SphereGeometry(5, 32, 32);
+            const blackHoleMaterial = new THREE.MeshBasicMaterial({ 
+                color: 0x000000,
+                transparent: true,
+                opacity: 0.95
+            });
+            
+            blackHole = new THREE.Mesh(blackHoleGeometry, blackHoleMaterial);
+            scene.add(blackHole);
+            
+            // Добавим эффект обскурации (затенение объектов за черной дырой)
+            const haloGeometry = new THREE.SphereGeometry(5.5, 32, 32);
+            const haloMaterial = new THREE.MeshBasicMaterial({
+                color: 0x000033,
+                transparent: true,
+                opacity: 0.6,
+                side: THREE.BackSide
+            });
+            
+            const halo = new THREE.Mesh(haloGeometry, haloMaterial);
+            blackHole.add(halo);
+            
+            // Создаем визуальный эффект джета (выброса вещества)
+            createJet();
+            
+            // Параметры черной дыры
+            blackHole.mass = 1e30; // Масса в кг
+            blackHole.schwarzschildRadius = (2 * G * blackHole.mass) / (C * C);
+        }
+        
+        // Создание джета (выброса вещества из черной дыры)
+        function createJet() {
+            // Первый джет - вверх
+            const jetGeometry1 = new THREE.CylinderGeometry(0.5, 2, 30, 16, 1, true);
+            const jetMaterial1 = new THREE.MeshBasicMaterial({
+                color: 0x0066ff,
+                transparent: true,
+                opacity: 0.7,
+                side: THREE.DoubleSide
+            });
+            
+            const jet1 = new THREE.Mesh(jetGeometry1, jetMaterial1);
+            jet1.position.set(0, 20, 0);
+            blackHole.add(jet1);
+            
+            // Второй джет - вниз
+            const jetGeometry2 = new THREE.CylinderGeometry(0.5, 2, 30, 16, 1, true);
+            const jetMaterial2 = new THREE.MeshBasicMaterial({
+                color: 0x0066ff,
+                transparent: true,
+                opacity: 0.7,
+                side: THREE.DoubleSide
+            });
+            
+            const jet2 = new THREE.Mesh(jetGeometry2, jetMaterial2);
+            jet2.position.set(0, -20, 0);
+            jet2.rotation.x = Math.PI;
+            blackHole.add(jet2);
+            
+            // Добавляем частицы для джета
+            createJetParticles(jet1, true);
+            createJetParticles(jet2, false);
+        }
+        
+        // Создание частиц для джета
+        function createJetParticles(jet, isUp) {
+            const particlesGeometry = new THREE.BufferGeometry();
+            const particlesMaterial = new THREE.PointsMaterial({
+                color: 0x66ccff,
+                size: 0.8,
+                transparent: true,
+                opacity: 0.7,
+                blending: THREE.AdditiveBlending
+            });
+            
+            const particlesCount = 500;
+            const particlesPositions = new Float32Array(particlesCount * 3);
+            const particlesVelocities = new Float32Array(particlesCount * 3);
+            const particlesLifetimes = new Float32Array(particlesCount);
+            
+            // Инициализация частиц
+            for (let i = 0; i < particlesCount; i++) {
+                const i3 = i * 3;
+                
+                // Случайная начальная позиция внутри цилиндра
+                const angle = Math.random() * Math.PI * 2;
+                const radius = Math.random() * 0.5;
+                const height = Math.random() * 30;
+                
+                particlesPositions[i3] = radius * Math.cos(angle);
+                particlesPositions[i3+1] = isUp ? height : -height;
+                particlesPositions[i3+2] = radius * Math.sin(angle);
+                
+                // Скорость - наружу и вверх/вниз
+                const speed = 0.1 + Math.random() * 0.2;
+                const directionY = isUp ? 1 : -1;
+                
+                particlesVelocities[i3] = (Math.random() - 0.5) * 0.02;
+                particlesVelocities[i3+1] = directionY * speed;
+                particlesVelocities[i3+2] = (Math.random() - 0.5) * 0.02;
+                
+                // Время жизни
+                particlesLifetimes[i] = Math.random();
+            }
+            
+            particlesGeometry.setAttribute('position', new THREE.BufferAttribute(particlesPositions, 3));
+            
+            const particles = new THREE.Points(particlesGeometry, particlesMaterial);
+            particles.userData.velocities = particlesVelocities;
+            particles.userData.lifetimes = particlesLifetimes;
+            particles.userData.isUp = isUp;
+            
+            jet.add(particles);
+            jet.particles = particles;
+        }
+        
+        // Обновление частиц джета
+        function updateJetParticles(jet, delta) {
+            if (!jet.particles) return;
+            
+            const particles = jet.particles;
+            const positions = particles.geometry.attributes.position.array;
+            const velocities = particles.userData.velocities;
+            const lifetimes = particles.userData.lifetimes;
+            const isUp = particles.userData.isUp;
+            
+            for (let i = 0; i < lifetimes.length; i++) {
+                const i3 = i * 3;
+                
+                // Увеличиваем время жизни
+                lifetimes[i] += 0.01 * delta * simulationSpeed;
+                
+                // Обновляем позицию
+                positions[i3] += velocities[i3] * delta * simulationSpeed;
+                positions[i3+1] += velocities[i3+1] * delta * simulationSpeed;
+                positions[i3+2] += velocities[i3+2] * delta * simulationSpeed;
+                
+                // Если частица выходит за пределы или время жизни истекло, перезапускаем
+                const y = positions[i3+1];
+                if ((isUp && y > 30) || (!isUp && y < -30) || lifetimes[i] >= 1.0) {
+                    // Новая начальная позиция
+                    const angle = Math.random() * Math.PI * 2;
+                    const radius = Math.random() * 0.5;
+                    
+                    positions[i3] = radius * Math.cos(angle);
+                    positions[i3+1] = isUp ? 0 : 0;
+                    positions[i3+2] = radius * Math.sin(angle);
+                    
+                    // Новая скорость
+                    const speed = 0.1 + Math.random() * 0.2;
+                    const directionY = isUp ? 1 : -1;
+                    
+                    velocities[i3] = (Math.random() - 0.5) * 0.02;
+                    velocities[i3+1] = directionY * speed;
+                    velocities[i3+2] = (Math.random() - 0.5) * 0.02;
+                    
+                    // Сбрасываем время жизни
+                    lifetimes[i] = 0;
+                }
+            }
+            
+            particles.geometry.attributes.position.needsUpdate = true;
+        }
+        
+        // Создание потока вещества от звезды-донора к черной дыре
+        function createMatterStream() {
+            const streamGeometry = new THREE.BufferGeometry();
+            const streamMaterial = new THREE.PointsMaterial({
+                color: 0xffccaa,
+                size: 0.4,
+                transparent: true,
+                opacity: 0.7,
+                blending: THREE.AdditiveBlending
+            });
+            
+            const positions = new Float32Array(3000 * 3); // 1000 точек, по 3 координаты
+            const velocities = new Float32Array(3000 * 3);
+            const lifetimes = new Float32Array(3000);
+            
+            // Инициализация частиц
+            for (let i = 0; i < 3000; i++) {
+                // Не показываем все частицы сразу, распределяем их жизненный цикл
+                lifetimes[i] = Math.random();
+                
+                // Начальная позиция - возле звезды-донора
+                updateStreamParticle(i, positions, velocities, lifetimes, true);
+            }
+            
+            streamGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            
+            const streamParticles = new THREE.Points(streamGeometry, streamMaterial);
+            streamParticles.userData.velocities = velocities;
+            streamParticles.userData.lifetimes = lifetimes;
+            scene.add(streamParticles);
+            
+            donorStar.streamParticles = streamParticles;
+        }
+        
+        // Обновление частицы в потоке вещества
+        function updateStreamParticle(index, positions, velocities, lifetimes, isInit = false) {
+            const i3 = index * 3;
+            
+            if (isInit || lifetimes[index] >= 1.0) {
+                // Создаем новую частицу возле звезды-донора
+                const offset = new THREE.Vector3(
+                    (Math.random() - 0.5) * 5,
+                    (Math.random() - 0.5) * 5,
+                    (Math.random() - 0.5) * 5
+                );
+                
+                positions[i3] = donorStar.position.x + offset.x;
+                positions[i3+1] = donorStar.position.y + offset.y;
+                positions[i3+2] = donorStar.position.z + offset.z;
+                
+                // Направление к черной дыре с небольшой случайностью
+                const direction = new THREE.Vector3(
+                    blackHole.position.x - positions[i3],
+                    blackHole.position.y - positions[i3+1],
+                    blackHole.position.z - positions[i3+2]
+                ).normalize();
+                
+                const speed = 0.2 + Math.random() * 0.3;
+                velocities[i3] = direction.x * speed;
+                velocities[i3+1] = direction.y * speed;
+                velocities[i3+2] = direction.z * speed;
+                
+                lifetimes[index] = 0;
+            }
+        }
+        
+        // Создание аккреционного диска
+        function createAccretionDisk() {
+            // Создаем несколько колец с разными радиусами для реалистичности
+            const diskGroup = new THREE.Group();
+            
+            for (let i = 0; i < 5; i++) {
+                const innerRadius = 6 + i * 1.5;
+                const outerRadius = innerRadius + 4 + i * 1.5;
+                
+                const diskGeometry = new THREE.RingGeometry(innerRadius, outerRadius, 64, 4);
+                
+                // Создаем градиентную текстуру для диска
+                const canvas = document.createElement('canvas');
+                canvas.width = 512;
+                canvas.height = 1;
+                const context = canvas.getContext('2d');
+                
+                // Создаем градиент от красного ближе к черной дыре до синего дальше
+                const gradient = context.createLinearGradient(0, 0, canvas.width, 0);
+                
+                if (i === 0) {
+                    // Внутренний диск ярче и горячее
+                    gradient.addColorStop(0, '#ff2200');
+                    gradient.addColorStop(0.5, '#ff6600');
+                    gradient.addColorStop(1, '#ffaa00');
+                } else {
+                    gradient.addColorStop(0, '#ff4400');
+                    gradient.addColorStop(0.3, '#ffaa00');
+                    gradient.addColorStop(0.6, '#ffffaa');
+                    gradient.addColorStop(1, '#aaccff');
+                }
+                
+                context.fillStyle = gradient;
+                context.fillRect(0, 0, canvas.width, canvas.height);
+                
+                const texture = new THREE.Texture(canvas);
+                texture.needsUpdate = true;
+                
+                const diskMaterial = new THREE.MeshBasicMaterial({
+                    map: texture,
+                    side: THREE.DoubleSide,
+                    transparent: true,
+                    opacity: 0.75 - i * 0.1
+                });
+                
+                const diskRing = new THREE.Mesh(diskGeometry, diskMaterial);
+                diskRing.rotation.x = Math.PI / 2;
+                diskRing.rotation.z = i * 0.2; // Немного смещаем каждое кольцо для трехмерности
+                
+                diskGroup.add(diskRing);
+            }
+            
+            accretionDisk = diskGroup;
+            scene.add(accretionDisk);
+            
+            // Добавим частицы для эффекта
+            createAccretionParticles();
+        }
+        
+        // Создание частиц для аккреционного диска
+        function createAccretionParticles() {
+            const particlesGeometry = new THREE.BufferGeometry();
+            
+            // Используем TextureLoader для загрузки текстуры частицы
+            const particleTexture = createParticleTexture();
+            
+            const particlesMaterial = new THREE.PointsMaterial({
+                size: 0.5,
+                map: particleTexture,
+                transparent: true,
+                opacity: 0.8,
+                vertexColors: true,
+                blending: THREE.AdditiveBlending
+            });
+            
+            const particlesVertices = [];
+            const particlesVelocities = [];
+            const particlesColors = [];
+            const particlesSizes = [];
+            
+            for (let i = 0; i < 15000; i++) {
+                const radius = 6 + Math.random() * 30;
+                const angle = Math.random() * Math.PI * 2;
+                const height = (Math.random() - 0.5) * (1 + radius * 0.05);
+                
+                const x = radius * Math.cos(angle);
+                const y = height;
+                const z = radius * Math.sin(angle);
+                
+                particlesVertices.push(x, y, z);
+                
+                // Скорость частицы - тангенциальный вектор
+                const speed = Math.sqrt(G * blackHole.mass / radius) / 1e6;
+                const vx = -speed * Math.sin(angle);
+                const vz = speed * Math.cos(angle);
+                particlesVelocities.push(vx, 0, vz);
+                
+                // Цвет зависит от расстояния до черной дыры
+                let r, g, b;
+                if (radius < 10) {
+                    // Горячий красный/оранжевый ближе к центру
+                    r = 1;
+                    g = 0.3 + (radius - 6) / 4 * 0.3;
+                    b = 0.1;
+                } else if (radius < 20) {
+                    // Желтый в средней части
+                    r = 1;
+                    g = 0.6 + (radius - 10) / 10 * 0.4;
+                    b = 0.1 + (radius - 10) / 10 * 0.3;
+                } else {
+                    // Голубоватый ближе к внешнему краю
+                    r = 0.8 - (radius - 20) / 10 * 0.4;
+                    g = 1.0 - (radius - 20) / 10 * 0.2;
+                    b = 0.4 + (radius - 20) / 10 * 0.6;
+                }
+                
+                particlesColors.push(r, g, b);
+                
+                // Размер частицы - меньше ближе к черной дыре (более высокая температура, более высокая скорость)
+                const size = 0.2 + Math.random() * 0.6 * (radius / 30);
+                particlesSizes.push(size);
+            }
+            
+            particlesGeometry.setAttribute('position', new THREE.Float32BufferAttribute(particlesVertices, 3));
+            particlesGeometry.setAttribute('color', new THREE.Float32BufferAttribute(particlesColors, 3));
+            particlesGeometry.setAttribute('size', new THREE.Float32BufferAttribute(particlesSizes, 1));
+            
+            const particles = new THREE.Points(particlesGeometry, particlesMaterial);
+            particles.userData.velocities = particlesVelocities;
+            scene.add(particles);
+            
+            accretionDisk.particles = particles;
+        }
+        
+        // Создание текстуры для частиц
+        function createParticleTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 64;
+            canvas.height = 64;
+            const context = canvas.getContext('2d');
+            
+            // Создаем градиент для круглой частицы
+            const gradient = context.createRadialGradient(
+                canvas.width / 2, canvas.height / 2, 0,
+                canvas.width / 2, canvas.height / 2, canvas.width / 2
+            );
+            
+            gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+            gradient.addColorStop(0.3, 'rgba(255, 255, 255, 0.8)');
+            gradient.addColorStop(0.7, 'rgba(255, 255, 255, 0.3)');
+            gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+            
+            context.fillStyle = gradient;
+            context.fillRect(0, 0, canvas.width, canvas.height);
+            
+            const texture = new THREE.CanvasTexture(canvas);
+            return texture;
+        }
+        
+        // Создание текстуры звезды с шумом Перлина
+        function createStarTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 512;
+            const context = canvas.getContext('2d');
+            
+            // Заполняем базовым цветом
+            context.fillStyle = '#ffaa00';
+            context.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Добавляем шум Перлина
+            const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imageData.data;
+            
+            for (let y = 0; y < canvas.height; y++) {
+                for (let x = 0; x < canvas.width; x++) {
+                    const i = (y * canvas.width + x) * 4;
+                    
+                    // Генерируем шум Перлина с разными частотами
+                    const noise1 = noiseGenerator.noise2D(x / 30, y / 30) * 0.5;
+                    const noise2 = noiseGenerator.noise2D(x / 10, y / 10) * 0.25;
+                    const noise = (noise1 + noise2) * 0.75 + 0.5;
+                    
+                    // Создаем вариации цвета звезды
+                    data[i] = 255; // R
+                    data[i+1] = Math.min(255, 170 + noise * 70); // G
+                    data[i+2] = Math.max(0, noise * 50); // B
+                }
+            }
+            
+            // Добавляем вспышки и пятна на поверхности
+            for (let i = 0; i < 10; i++) {
+                const x = Math.random() * canvas.width;
+                const y = Math.random() * canvas.height;
+                const radius = 20 + Math.random() * 30;
+                const intensity = 0.5 + Math.random() * 0.5;
+                
+                for (let py = Math.max(0, y - radius); py < Math.min(canvas.height, y + radius); py++) {
+                    for (let px = Math.max(0, x - radius); px < Math.min(canvas.width, x + radius); px++) {
+                        const dist = Math.sqrt((px - x) ** 2 + (py - y) ** 2);
+                        if (dist < radius) {
+                            const i = (py * canvas.width + px) * 4;
+                            const factor = (1 - dist / radius) * intensity;
+                            
+                            data[i] = Math.min(255, data[i] + factor * 50);
+                            data[i+1] = Math.min(255, data[i+1] + factor * 30);
+                        }
+                    }
+                }
+            }
+            
+            context.putImageData(imageData, 0, 0);
+            
+            // Создаем текстуру из canvas
+            const texture = new THREE.CanvasTexture(canvas);
+            return texture;
+        }
+        
+        // Создание звезды
+        function createStar() {
+            const starGeometry = new THREE.SphereGeometry(6, 64, 64);
+            const starTexture = createStarTexture();
+            
+            const starMaterial = new THREE.MeshBasicMaterial({ 
+                map: starTexture,
+                emissive: 0xffaa00,
+                emissiveIntensity: 0.5
+            });
+            
+            star = new THREE.Mesh(starGeometry, starMaterial);
+            star.position.set(60, 0, 0);
+            scene.add(star);
+            
+            // Параметры звезды
+            star.mass = 2e30; // Масса в кг
+            star.velocity = new THREE.Vector3(0, 0, Math.sqrt(G * blackHole.mass / 60) / 1e6);
+            
+            // Добавим свечение
+            const starLight = new THREE.PointLight(0xffffaa, 1.5, 150);
+            star.add(starLight);
+            
+            // Добавим корону вокруг звезды
+            const coronaGeometry = new THREE.SphereGeometry(7, 32, 32);
+            const coronaMaterial = new THREE.MeshBasicMaterial({
+                color: 0xffdd44,
+                transparent: true,
+                opacity: 0.3,
+                side: THREE.BackSide
+            });
+            
+            const corona = new THREE.Mesh(coronaGeometry, coronaMaterial);
+            star.add(corona);
+            
+            // Создаем звезду-донор, которая "питает" аккреционный диск
+            createDonorStar();
+        }
+        
+        // Создание звезды-донора для аккреционного диска
+        function createDonorStar() {
+            const donorGeometry = new THREE.SphereGeometry(4, 32, 32);
+            const donorTexture = createStarTexture();
+            
+            const donorMaterial = new THREE.MeshBasicMaterial({ 
+                map: donorTexture,
+                color: 0xffccaa
+            });
+            
+            donorStar = new THREE.Mesh(donorGeometry, donorMaterial);
+            donorStar.position.set(-30, 0, 10);
+            scene.add(donorStar);
+            
+            // Параметры звезды-донора
+            donorStar.mass = 0.8e30; // Масса в кг
+            donorStar.velocity = new THREE.Vector3(0, 0, -Math.sqrt(G * blackHole.mass / 30) / 1e6);
+            
+            // Добавим свечение
+            const donorLight = new THREE.PointLight(0xffccaa, 0.8, 100);
+            donorStar.add(donorLight);
+            
+            // Создаем поток вещества от звезды-донора к черной дыре
+            createMatterStream();
+        }
+        
+        // Создание планет с текстурами
+        function createPlanets() {
+            // Разнообразные цвета и размеры планет
+            const planetColors = [
+                { base: 0x3366ff, spots: 0x1133cc }, // Синяя водная планета
+                { base: 0x66cc99, spots: 0x338855 }, // Зеленая растительная планета
+                { base: 0xaa9977, spots: 0x776655 }, // Коричневая пустынная планета
+                { base: 0xcc6644, spots: 0x994422 }, // Красная планета типа Марса
+                { base: 0x999999, spots: 0x666666 }  // Серая скалистая планета
+            ];
+            const planetSizes = [1.5, 2.2, 1.8, 2.5, 1.2];
+            
+            for (let i = 0; i < 5; i++) {
+                // Создаем текстуру для планеты с шумом Перлина
+                const planetTexture = createPlanetTexture(planetColors[i].base, planetColors[i].spots);
+                
+                const planetGeometry = new THREE.SphereGeometry(planetSizes[i], 32, 32);
+                const planetMaterial = new THREE.MeshBasicMaterial({ 
+                    map: planetTexture,
+                    // Для газовых гигантов добавляем свечение
+                    emissive: i === 1 || i === 3 ? planetColors[i].base : 0x000000,
+                    emissiveIntensity: 0.1
+                });
+                
+                const planet = new THREE.Mesh(planetGeometry, planetMaterial);
+                
+                // Расположим планеты на расстоянии от звезды с некоторым наклоном
+                const distance = 10 + (i * 8);
+                const angle = Math.random() * Math.PI * 2;
+                const incline = (Math.random() - 0.5) * 0.2; // Небольшой наклон орбиты
+                
+                const px = 60 + distance * Math.cos(angle);
+                const py = distance * Math.sin(incline);
+                const pz = distance * Math.sin(angle);
+                
+                planet.position.set(px, py, pz);
+                scene.add(planet);
+                
+                // Наклон оси планеты
+                planet.rotation.x = Math.random() * 0.5;
+                
+                // Добавляем кольца для некоторых планет
+                if (i === 1 || i === 4) {
+                    const ringGeometry = new THREE.RingGeometry(planetSizes[i] * 1.5, planetSizes[i] * 2.5, 32, 4);
+                    const ringMaterial = new THREE.MeshBasicMaterial({ 
+                        color: planetColors[i].spots,
+                        side: THREE.DoubleSide,
+                        transparent: true,
+                        opacity: 0.7
+                    });
+                    const ring = new THREE.Mesh(ringGeometry, ringMaterial);
+                    ring.rotation.x = Math.PI / 2;
+                    ring.rotation.y = Math.random() * 0.5;
+                    planet.add(ring);
+                }
+                
+                // Параметры планеты
+                planet.mass = 1e24 + Math.random() * 9e24; // Масса в кг
+                planet.orbitRadius = distance;
+                planet.orbitSpeed = Math.sqrt(G * star.mass / distance) / 1e6;
+                planet.orbitAngle = angle;
+                planet.orbitInclination = incline;
+                planet.orbitCenter = star;
+                planet.rotationSpeed = (Math.random() * 0.02 + 0.01); // Скорость вращения вокруг оси
+                
+                planets.push(planet);
+            }
+            
+            // Добавляем несколько спутников для некоторых планет
+            addMoons();
+        }
+        
+        // Создание текстуры планеты с шумом Перлина
+        function createPlanetTexture(baseColor, spotColor) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 512;
+            const context = canvas.getContext('2d');
+            
+            // Конвертируем hex в rgb
+            const baseRGB = {
+                r: (baseColor >> 16) & 255,
+                g: (baseColor >> 8) & 255,
+                b: baseColor & 255
+            };
+            
+            const spotRGB = {
+                r: (spotColor >> 16) & 255,
+                g: (spotColor >> 8) & 255,
+                b: spotColor & 255
+            };
+            
+            // Заполняем базовым цветом
+            context.fillStyle = `rgb(${baseRGB.r}, ${baseRGB.g}, ${baseRGB.b})`;
+            context.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Получаем данные изображения
+            const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imageData.data;
+            
+            // Используем новый генератор шума для этой планеты
+            const planetNoise = new SimplexNoise(Math.random() * 1000);
+            
+            // Добавляем шум Перлина
+            for (let y = 0; y < canvas.height; y++) {
+                for (let x = 0; x < canvas.width; x++) {
+                    const i = (y * canvas.width + x) * 4;
+                    
+                    // Преобразуем координаты в сферические для более реалистичной карты планеты
+                    const nx = x / canvas.width - 0.5;
+                    const ny = y / canvas.height - 0.5;
+                    const r = Math.sqrt(nx*nx + ny*ny);
+                    
+                    // Центральная часть - базовый цвет, края - переход к spotColor
+                    let noise;
+                    
+                    if (r < 0.5) {
+                        // Несколько слоев шума с разными частотами
+                        noise = 
+                            planetNoise.noise2D(x / 20, y / 20) * 0.5 +
+                            planetNoise.noise2D(x / 10, y / 10) * 0.3 +
+                            planetNoise.noise2D(x / 5, y / 5) * 0.2;
+                        
+                        // Нормализуем к диапазону [0, 1]
+                        noise = (noise + 1) / 2;
+                        
+                        // Интерполируем между базовым цветом и цветом пятен
+                        data[i] = Math.floor(baseRGB.r * (1 - noise) + spotRGB.r * noise);
+                        data[i+1] = Math.floor(baseRGB.g * (1 - noise) + spotRGB.g * noise);
+                        data[i+2] = Math.floor(baseRGB.b * (1 - noise) + spotRGB.b * noise);
+                    } else {
+                        // Затемнение по краям для эффекта сферы
+                        const edgeDarkening = Math.pow((0.5 - r) * 2, 0.5);
+                        data[i] = Math.floor(baseRGB.r * edgeDarkening);
+                        data[i+1] = Math.floor(baseRGB.g * edgeDarkening);
+                        data[i+2] = Math.floor(baseRGB.b * edgeDarkening);
+                    }
+                }
+            }
+            
+            // Применяем изменения
+            context.putImageData(imageData, 0, 0);
+            
+            // Создаем текстуру
+            const texture = new THREE.CanvasTexture(canvas);
+            return texture;
+        }
+        
+        // Добавление спутников к планетам
+        function addMoons() {
+            // Добавляем луны только для 2-й и 4-й планеты
+            [1, 3].forEach(planetIndex => {
+                const planet = planets[planetIndex];
+                const numMoons = planetIndex === 1 ? 2 : 3;
+                
+                for (let i = 0; i < numMoons; i++) {
+                    const moonSize = 0.3 + Math.random() * 0.3;
+                    const moonGeometry = new THREE.SphereGeometry(moonSize, 16, 16);
+                    
+                    // Создаем простую текстуру для луны
+                    const moonCanvas = document.createElement('canvas');
+                    moonCanvas.width = 128;
+                    moonCanvas.height = 128;
+                    const moonCtx = moonCanvas.getContext('2d');
+                    
+                    // Базовый цвет спутника
+                    moonCtx.fillStyle = '#aaaaaa';
+                    moonCtx.fillRect(0, 0, moonCanvas.width, moonCanvas.height);
+                    
+                    // Добавляем кратеры
+                    for (let j = 0; j < 20; j++) {
+                        const craterX = Math.random() * moonCanvas.width;
+                        const craterY = Math.random() * moonCanvas.height;
+                        const craterSize = 2 + Math.random() * 8;
+                        
+                        moonCtx.fillStyle = `rgba(60, 60, 60, ${Math.random() * 0.5 + 0.3})`;
+                        moonCtx.beginPath();
+                        moonCtx.arc(craterX, craterY, craterSize, 0, Math.PI * 2);
+                        moonCtx.fill();
+                    }
+                    
+                    const moonTexture = new THREE.CanvasTexture(moonCanvas);
+                    const moonMaterial = new THREE.MeshBasicMaterial({ map: moonTexture });
+                    
+                    const moon = new THREE.Mesh(moonGeometry, moonMaterial);
+                    
+                    // Расположение луны относительно планеты
+                    const moonDistance = planet.geometry.parameters.radius * (2 + i * 0.8);
+                    const moonAngle = Math.random() * Math.PI * 2;
+                    const moonInclination = (Math.random() - 0.5) * 0.5;
+                    
+                    moon.position.set(
+                        moonDistance * Math.cos(moonAngle),
+                        moonDistance * Math.sin(moonInclination),
+                        moonDistance * Math.sin(moonAngle)
+                    );
+                    
+                    // Добавляем луну как ребенка планеты, чтобы она двигалась вместе с планетой
+                    planet.add(moon);
+                    
+                    // Параметры орбиты луны
+                    moon.orbitRadius = moonDistance;
+                    moon.orbitSpeed = 0.01 + Math.random() * 0.01;
+                    moon.orbitAngle = moonAngle;
+                    moon.orbitInclination = moonInclination;
+                    
+                    // Добавляем функцию обновления для луны
+                    moon.update = function(delta) {
+                        // Вращаем луну вокруг планеты
+                        this.orbitAngle += this.orbitSpeed * delta * simulationSpeed;
+                        
+                        this.position.x = this.orbitRadius * Math.cos(this.orbitAngle);
+                        this.position.y = this.orbitRadius * Math.sin(this.orbitInclination);
+                        this.position.z = this.orbitRadius * Math.sin(this.orbitAngle);
+                        
+                        // Вращение луны вокруг своей оси
+                        this.rotation.y += 0.01 * delta * simulationSpeed;
+                    };
+                }
+            });
+        }
+        
+        // Обновление физики с учетом скорости симуляции
+        function updatePhysics(delta) {
+            // Применяем множитель скорости симуляции
+            const scaledDelta = delta * simulationSpeed;
+            
+            // Обновление положения звезды
+            updateBodyPosition(star, blackHole, scaledDelta);
+            
+            // Обновление положения звезды-донора
+            updateBodyPosition(donorStar, blackHole, scaledDelta);
+            
+            // Обновление положения планет
+            planets.forEach(planet => {
+                // Влияние звезды на планету
+                updateOrbit(planet, star, scaledDelta);
+                
+                // Влияние черной дыры на планету (если планета достаточно близко)
+                if (planet.position.distanceTo(blackHole.position) < 100) {
+                    updateBodyPosition(planet, blackHole, scaledDelta * 0.5);
+                }
+            });
+            
+            // Обновление потока вещества от звезды-донора
+            if (donorStar.streamParticles) {
+                const positions = donorStar.streamParticles.geometry.attributes.position.array;
+                const velocities = donorStar.streamParticles.userData.velocities;
+                const lifetimes = donorStar.streamParticles.userData.lifetimes;
+                
+                for (let i = 0; i < lifetimes.length; i++) {
+                    const i3 = i * 3;
+                    
+                    // Увеличиваем время жизни частицы
+                    lifetimes[i] += 0.005 * scaledDelta;
+                    
+                    // Обновляем позицию
+                    positions[i3] += velocities[i3] * scaledDelta;
+                    positions[i3+1] += velocities[i3+1] * scaledDelta;
+                    positions[i3+2] += velocities[i3+2] * scaledDelta;
+                    
+                    // Проверяем расстояние до черной дыры
+                    const distToBH = Math.sqrt(
+                        Math.pow(positions[i3] - blackHole.position.x, 2) +
+                        Math.pow(positions[i3+1] - blackHole.position.y, 2) +
+                        Math.pow(positions[i3+2] - blackHole.position.z, 2)
+                    );
+                    
+                    // Если частица достигла черной дыры или срок жизни истек, сбрасываем её
+                    if (distToBH < 5 || lifetimes[i] >= 1.0) {
+                        updateStreamParticle(i, positions, velocities, lifetimes);
+                    } else {
+                        // Гравитационное ускорение по направлению к черной дыре
+                        const dx = blackHole.position.x - positions[i3];
+                        const dy = blackHole.position.y - positions[i3+1];
+                        const dz = blackHole.position.z - positions[i3+2];
+                        
+                        const distToBHCubed = Math.pow(distToBH, 3);
+                        
+                        // Увеличиваем скорость под действием гравитации
+                        const accelFactor = scaledDelta * 0.002 * blackHole.mass / distToBHCubed;
+                        velocities[i3] += dx * accelFactor;
+                        velocities[i3+1] += dy * accelFactor;
+                        velocities[i3+2] += dz * accelFactor;
+                    }
+                }
+                
+                donorStar.streamParticles.geometry.attributes.position.needsUpdate = true;
+            }
+            
+            // Обновление частиц аккреционного диска
+            if (showAccretionDisk && accretionDisk.particles) {
+                const positions = accretionDisk.particles.geometry.attributes.position.array;
+                const velocities = accretionDisk.particles.userData.velocities;
+                
+                for (let i = 0; i < positions.length; i += 3) {
+                    // Обновление позиций частиц с учетом скорости симуляции
+                    positions[i] += velocities[i] * scaledDelta * 10;
+                    positions[i+2] += velocities[i+2] * scaledDelta * 10;
+                    
+                    // Расчет расстояния до черной дыры
+                    const x = positions[i];
+                    const z = positions[i+2];
+                    const distance = Math.sqrt(x*x + z*z);
+                    
+                    // Если частица слишком близко к черной дыре, переместим её обратно на внешний край
+                    if (distance < 6) {
+                        const angle = Math.atan2(z, x);
+                        positions[i] = 30 * Math.cos(angle);
+                        positions[i+2] = 30 * Math.sin(angle);
+                        
+                        // Пересчитаем скорость
+                        const radius = 30;
+                        const speed = Math.sqrt(G * blackHole.mass / radius) / 1e6;
+                        velocities[i] = -speed * Math.sin(angle);
+                        velocities[i+2] = speed * Math.cos(angle);
+                    }
+                    
+                    // Добавляем небольшие флуктуации для более реалистичного движения
+                    positions[i+1] += (Math.random() - 0.5) * 0.01 * scaledDelta;
+                    velocities[i] += (Math.random() - 0.5) * 0.0001 * scaledDelta;
+                    velocities[i+2] += (Math.random() - 0.5) * 0.0001 * scaledDelta;
+                }
+                
+                accretionDisk.particles.geometry.attributes.position.needsUpdate = true;
+            }
+        
+        // Обновление орбитального движения
+        function updateOrbit(body, center, delta) {
+            const angle = body.orbitAngle + body.orbitSpeed * delta;
+            body.orbitAngle = angle;
+            
+            const x = center.position.x + body.orbitRadius * Math.cos(angle);
+            const y = body.orbitInclination ? center.position.y + body.orbitRadius * Math.sin(body.orbitInclination) : 0;
+            const z = center.position.z + body.orbitRadius * Math.sin(angle);
+            
+            body.position.set(x, y, z);
+            
+            // Вращение планеты вокруг своей оси
+            if (body.rotationSpeed) {
+                body.rotation.y += body.rotationSpeed * delta;
+            }
+            
+            // Обновление спутников
+            body.children.forEach(child => {
+                if (child.update) {
+                    child.update(delta);
+                }
+            });
+        }
+        
+        // Обновление позиции тела под влиянием гравитации
+        function updateBodyPosition(body, gravitySource, delta) {
+            const dx = gravitySource.position.x - body.position.x;
+            const dy = gravitySource.position.y - body.position.y;
+            const dz = gravitySource.position.z - body.position.z;
+            
+            const distSq = dx*dx + dy*dy + dz*dz;
+            const dist = Math.sqrt(distSq);
+            
+            // Исключаем случаи, когда тела слишком близко
+            if (dist < 5) return;
+            
+            // Сила гравитации F = G*m1*m2/r^2
+            const force = G * body.mass * gravitySource.mass / distSq;
+            
+            // Ускорение a = F/m = G*m2/r^2
+            const accel = force / body.mass;
+            
+            // Компоненты ускорения
+            const ax = accel * dx / dist;
+            const ay = accel * dy / dist;
+            const az = accel * dz / dist;
+            
+            // Если у тела нет скорости, инициализируем её
+            if (!body.velocity) {
+                body.velocity = new THREE.Vector3(0, 0, 0);
+            }
+            
+            // Обновление скорости v = v + a*dt
+            body.velocity.x += ax * delta / 1e6;
+            body.velocity.y += ay * delta / 1e6;
+            body.velocity.z += az * delta / 1e6;
+            
+            // Обновление позиции p = p + v*dt
+            body.position.x += body.velocity.x * delta;
+            body.position.y += body.velocity.y * delta;
+            body.position.z += body.velocity.z * delta;
+        }
+        
+        // Эффект гравитационного линзирования (улучшенный)
+        function updateGravitationalLensing() {
+            if (!window.lensingEffect) {
+                // Создаем визуальный эффект искривления пространства вокруг черной дыры
+                const lensGeometry = new THREE.IcosahedronGeometry(15, 2); // Более детализированная сфера
+                
+                // Материал с эффектом преломления и отражения
+                const lensMaterial = new THREE.MeshBasicMaterial({
+                    color: 0x000000,
+                    transparent: true,
+                    opacity: 0.1,
+                    side: THREE.DoubleSide,
+                    wireframe: true
+                });
+                
+                const lensEffect = new THREE.Mesh(lensGeometry, lensMaterial);
+                scene.add(lensEffect);
+                window.lensingEffect = lensEffect;
+                
+                // Создаем еще один слой с другим размером и скоростью вращения
+                const lensGeometry2 = new THREE.IcosahedronGeometry(20, 1);
+                const lensMaterial2 = new THREE.MeshBasicMaterial({
+                    color: 0x0033aa,
+                    transparent: true,
+                    opacity: 0.05,
+                    side: THREE.DoubleSide,
+                    wireframe: true
+                });
+                
+                const lensEffect2 = new THREE.Mesh(lensGeometry2, lensMaterial2);
+                scene.add(lensEffect2);
+                window.lensingEffect2 = lensEffect2;
+            }
+            
+            // Обновляем визуальный эффект
+            if (showGravitationalLensing) {
+                window.lensingEffect.visible = true;
+                window.lensingEffect2.visible = true;
+                
+                // Деформируем сетку для создания эффекта искривления пространства
+                const positions = window.lensingEffect.geometry.attributes.position.array;
+                const time = Date.now() * 0.001;
+                
+                for (let i = 0; i < positions.length; i += 3) {
+                    const x = positions[i];
+                    const y = positions[i+1];
+                    const z = positions[i+2];
+                    
+                    const distance = Math.sqrt(x*x + y*y + z*z);
+                    
+                    // Добавляем пульсацию
+                    const pulseFactor = Math.sin(time + distance * 0.2) * 0.1;
+                    const scaleFactor = 1 + pulseFactor;
+                    
+                    positions[i] = x * scaleFactor;
+                    positions[i+1] = y * scaleFactor;
+                    positions[i+2] = z * scaleFactor;
+                }
+                
+                window.lensingEffect.geometry.attributes.position.needsUpdate = true;
+                
+                // Вращаем эффекты
+                window.lensingEffect.rotation.x += 0.001 * simulationSpeed;
+                window.lensingEffect.rotation.y += 0.002 * simulationSpeed;
+                window.lensingEffect2.rotation.x -= 0.0015 * simulationSpeed;
+                window.lensingEffect2.rotation.z += 0.001 * simulationSpeed;
+                
+                // Обновляем масштаб черной дыры для визуального эффекта
+                blackHole.scale.set(1.2, 1.2, 1.2);
+            } else {
+                // Скрываем эффект, если отключен
+                if (window.lensingEffect) window.lensingEffect.visible = false;
+                if (window.lensingEffect2) window.lensingEffect2.visible = false;
+                
+                // Возвращаем масштаб черной дыры к нормальному
+                blackHole.scale.set(1, 1, 1);
+            }
+        }
+        
+        // Обновление камеры
+        function updateCamera() {
+            if (cameraMode === 'orbit') {
+                // Орбитальная камера вокруг черной дыры
+                const time = Date.now() * 0.0003;
+                const radius = 120;
+                camera.position.x = Math.cos(time) * radius;
+                camera.position.z = Math.sin(time) * radius;
+                camera.position.y = 30 + Math.sin(time * 0.5) * 20;
+                camera.lookAt(0, 0, 0);
+            } else if (cameraMode === 'follow') {
+                // Камера следует за выбранной планетой или звездой
+                let target;
+                if (followIndex === planets.length) {
+                    target = star;
+                } else if (followIndex === planets.length + 1) {
+                    target = donorStar;
+                } else {
+                    target = planets[followIndex];
+                }
+                
+                // Позиция немного позади и сбоку от объекта
+                const offset = new THREE.Vector3(10, 5, 10);
+                camera.position.set(
+                    target.position.x + offset.x,
+                    target.position.y + offset.y,
+                    target.position.z + offset.z
+                );
+                
+                // Если мы следуем за планетой, смотрим на звезду
+                // Если за звездой - смотрим на черную дыру
+                if (followIndex < planets.length) {
+                    camera.lookAt(star.position);
+                } else {
+                    camera.lookAt(blackHole.position);
+                }
+            } else if (cameraMode === 'blackhole') {
+                // Вид от черной дыры, смотрим на звезду
+                camera.position.set(
+                    blackHole.position.x,
+                    blackHole.position.y + 3,
+                    blackHole.position.z
+                );
+                camera.lookAt(star.position);
+            } else if (cameraMode === 'dramatic') {
+                // Драматический вид сбоку от системы
+                const time = Date.now() * 0.0001;
+                const radius = 150;
+                camera.position.set(
+                    Math.cos(time) * radius,
+                    10 + Math.sin(time * 2) * 5,
+                    Math.sin(time) * radius / 2
+                );
+                
+                // Смотрим на область между черной дырой и звездами
+                const lookTarget = new THREE.Vector3(
+                    (blackHole.position.x + star.position.x) / 3,
+                    0,
+                    (blackHole.position.z + star.position.z) / 3
+                );
+                camera.lookAt(lookTarget);
+            }
+            
+            // Добавляем небольшую тряску камеры при близости к черной дыре
+            if (camera.position.distanceTo(blackHole.position) < 30) {
+                const shakeIntensity = (30 - camera.position.distanceTo(blackHole.position)) / 30 * 0.1;
+                camera.position.x += (Math.random() - 0.5) * shakeIntensity;
+                camera.position.y += (Math.random() - 0.5) * shakeIntensity;
+                camera.position.z += (Math.random() - 0.5) * shakeIntensity;
+            }
+        }
+        
+        // Обработчик изменения размеров окна
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+        
+        // Переключение режима камеры
+        function toggleCameraMode() {
+            if (cameraMode === 'orbit') {
+                cameraMode = 'follow';
+                followIndex = 0;
+            } else if (cameraMode === 'follow') {
+                followIndex = (followIndex + 1) % (planets.length + 2); // +2 для звезды и звезды-донора
+                if (followIndex === 0) {
+                    cameraMode = 'blackhole';
+                }
+            } else if (cameraMode === 'blackhole') {
+                cameraMode = 'dramatic';
+            } else {
+                cameraMode = 'orbit';
+            }
+            
+            // Обновляем информацию в UI
+            document.getElementById('info').textContent = getCameraInfo();
+        }
+        
+        // Получение информации о текущем режиме камеры
+        function getCameraInfo() {
+            if (cameraMode === 'orbit') {
+                return "Орбитальная камера - обзор всей системы";
+            } else if (cameraMode === 'follow') {
+                if (followIndex === planets.length) {
+                    return "Камера следует за главной звездой";
+                } else if (followIndex === planets.length + 1) {
+                    return "Камера следует за звездой-донором";
+                } else {
+                    return `Камера следует за планетой ${followIndex + 1}`;
+                }
+            } else if (cameraMode === 'blackhole') {
+                return "Вид от черной дыры";
+            } else {
+                return "Драматический обзор системы";
+            }
+        }
+        
+        // Переключение видимости аккреционного диска
+        function toggleAccretionDisk() {
+            showAccretionDisk = !showAccretionDisk;
+            accretionDisk.visible = showAccretionDisk;
+            if (accretionDisk.particles) {
+                accretionDisk.particles.visible = showAccretionDisk;
+            }
+            
+            // Обновляем текст на кнопке для лучшего UX
+            document.getElementById('toggleAccretionDisk').textContent = 
+                showAccretionDisk ? "Выключить аккреционный диск" : "Включить аккреционный диск";
+        }
+        
+        // Переключение эффекта гравитационного линзирования
+        function toggleGravitationalLensing() {
+            showGravitationalLensing = !showGravitationalLensing;
+            updateGravitationalLensing();
+            
+            // Обновляем текст на кнопке для лучшего UX
+            document.getElementById('toggleGravitationalLensing').textContent = 
+                showGravitationalLensing ? "Выключить гравитационное линзирование" : "Включить гравитационное линзирование";
+        }
+        
+        // Создание событий для добавления драматизма в симуляцию
+        function scheduleEvents() {
+            // Планируем случайные события
+            setInterval(() => {
+                // Выбираем случайное событие с определенной вероятностью
+                const eventType = Math.random();
+                
+                if (eventType < 0.3 && simulationSpeed > 0.5) {
+                    // Усиление джета
+                    createJetBurst();
+                } else if (eventType < 0.6) {
+                    // Выброс вещества из аккреционного диска
+                    createDiskEjection();
+                } else {
+                    // Вспышка на звезде
+                    createStellarFlare();
+                }
+            }, 10000); // Событие каждые ~10 секунд
+        }
+        
+        // Создание вспышки на звезде
+        function createStellarFlare() {
+            if (!star) return;
+            
+            // Создаем вспышку как яркий свет
+            const flareColor = new THREE.Color(0xffffaa);
+            const flareLight = new THREE.PointLight(flareColor, 2, 100);
+            star.add(flareLight);
+            
+            // Временно увеличиваем размер короны
+            if (star.children[1]) {
+                star.children[1].scale.set(1.5, 1.5, 1.5);
+                star.children[1].material.opacity = 0.7;
+            }
+            
+            // Убираем эффекты через некоторое время
+            setTimeout(() => {
+                star.remove(flareLight);
+                if (star.children[1]) {
+                    star.children[1].scale.set(1, 1, 1);
+                    star.children[1].material.opacity = 0.3;
+                }
+            }, 1000);
+        }
+        
+        // Создание выброса вещества из аккреционного диска
+        function createDiskEjection() {
+            if (!showAccretionDisk || !accretionDisk) return;
+            
+            // Создаем геометрию для выброса
+            const ejectionGeometry = new THREE.BufferGeometry();
+            const ejectionMaterial = new THREE.PointsMaterial({
+                color: 0xffaa66,
+                size: 0.8,
+                transparent: true,
+                opacity: 0.8,
+                blending: THREE.AdditiveBlending
+            });
+            
+            const particlesCount = 500;
+            const positions = new Float32Array(particlesCount * 3);
+            const velocities = [];
+            
+            // Выбираем случайный угол для выброса
+            const ejectionAngle = Math.random() * Math.PI * 2;
+            const ejectionRadius = 10 + Math.random() * 15;
+            
+            // Инициализируем частицы
+            for (let i = 0; i < particlesCount; i++) {
+                const i3 = i * 3;
+                const spreadAngle = ejectionAngle + (Math.random() - 0.5) * 0.5;
+                const distance = ejectionRadius + Math.random() * 2;
+                
+                positions[i3] = Math.cos(spreadAngle) * distance;
+                positions[i3+1] = (Math.random() - 0.5) * 2;
+                positions[i3+2] = Math.sin(spreadAngle) * distance;
+                
+                // Скорость - в направлении от центра
+                const speed = 0.1 + Math.random() * 0.2;
+                velocities.push(
+                    Math.cos(spreadAngle) * speed,
+                    (Math.random() - 0.5) * 0.1,
+                    Math.sin(spreadAngle) * speed
+                );
+            }
+            
+            ejectionGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            
+            const ejection = new THREE.Points(ejectionGeometry, ejectionMaterial);
+            ejection.userData.velocities = velocities;
+            ejection.userData.lifetime = 0;
+            ejection.userData.maxLifetime = 3; // Время жизни в секундах
+            
+            scene.add(ejection);
+            
+            // Сохраняем для обновления
+            if (!window.ejections) window.ejections = [];
+            window.ejections.push(ejection);
+        }
+        
+        // Создание усиленного выброса джета
+        function createJetBurst() {
+            if (!blackHole || blackHole.children.length < 4) return;
+            
+            // Выбираем случайный джет (верхний или нижний)
+            const jetIndex = Math.random() < 0.5 ? 2 : 3;
+            const jet = blackHole.children[jetIndex];
+            
+            if (jet) {
+                // Временно увеличиваем яркость и размер
+                jet.material.opacity = 1.0;
+                jet.scale.set(1.5, 1.2, 1.5);
+                
+                // Добавляем дополнительные частицы в джет
+                if (jet.particles) {
+                    const positions = jet.particles.geometry.attributes.position.array;
+                    const velocities = jet.particles.userData.velocities;
+                    
+                    for (let i = 0; i < velocities.length; i += 3) {
+                        // Увеличиваем скорость
+                        velocities[i] *= 2;
+                        velocities[i+1] *= 2;
+                        velocities[i+2] *= 2;
+                    }
+                }
+                
+                // Возвращаем в нормальное состояние через некоторое время
+                setTimeout(() => {
+                    if (jet) {
+                        jet.material.opacity = 0.7;
+                        jet.scale.set(1, 1, 1);
+                        
+                        if (jet.particles) {
+                            const velocities = jet.particles.userData.velocities;
+                            
+                            for (let i = 0; i < velocities.length; i += 3) {
+                                // Возвращаем скорость к нормальной
+                                velocities[i] *= 0.5;
+                                velocities[i+1] *= 0.5;
+                                velocities[i+2] *= 0.5;
+                            }
+                        }
+                    }
+                }, 2000);
+            }
+        }
+        
+        // Анимация
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            const delta = clock.getDelta();
+            
+            // Обновление физики
+            updatePhysics(delta);
+            
+            // Обновление эффектов
+            updateGravitationalLensing();
+            
+            // Обновление джетов черной дыры
+            if (blackHole.children.length >= 4) {
+                updateJetParticles(blackHole.children[2], delta);
+                updateJetParticles(blackHole.children[3], delta);
+            }
+            
+            // Обновление выбросов из аккреционного диска
+            if (window.ejections && window.ejections.length > 0) {
+                updateEjections(delta);
+            }
+            
+            // Обновление камеры
+            updateCamera();
+            
+            // Вращение аккреционного диска
+            if (showAccretionDisk) {
+                accretionDisk.children.forEach((ring, index) => {
+                    // Внутренние кольца вращаются быстрее
+                    const rotationSpeed = 0.002 * simulationSpeed / (index + 1);
+                    ring.rotation.z += rotationSpeed;
+                });
+            }
+            
+            // Добавляем пульсацию короны звезды
+            if (star.children[1]) { // Корона - это второй ребенок звезды
+                const time = Date.now() * 0.001;
+                const pulseFactor = 1 + Math.sin(time * 2) * 0.1;
+                star.children[1].scale.set(pulseFactor, pulseFactor, pulseFactor);
+            }
+            
+            // Добавляем пульсацию черной дыры
+            if (showGravitationalLensing && Math.random() < 0.05 * simulationSpeed) {
+                const pulse = new THREE.Mesh(
+                    new THREE.SphereGeometry(6, 32, 32),
+                    new THREE.MeshBasicMaterial({
+                        color: 0x0066ff,
+                        transparent: true,
+                        opacity: 0.5
+                    })
+                );
+                pulse.position.copy(blackHole.position);
+                pulse.userData.expansionRate = 0.5 + Math.random() * 0.5;
+                pulse.userData.opacity = 0.5;
+                scene.add(pulse);
+                
+                // Добавляем пульс в список для анимации
+                if (!window.pulses) window.pulses = [];
+                window.pulses.push(pulse);
+            }
+            
+            // Анимируем существующие пульсы
+            if (window.pulses && window.pulses.length > 0) {
+                for (let i = window.pulses.length - 1; i >= 0; i--) {
+                    const pulse = window.pulses[i];
+                    pulse.scale.multiplyScalar(1 + pulse.userData.expansionRate * 0.05 * simulationSpeed);
+                    pulse.material.opacity -= 0.02 * simulationSpeed;
+                    
+                    if (pulse.material.opacity <= 0) {
+                        scene.remove(pulse);
+                        window.pulses.splice(i, 1);
+                    }
+                }
+            }
+            
+            renderer.render(scene, camera);
+        }Speed;
+                    
+                    if (pulse.material.opacity <= 0) {
+                        scene.remove(pulse);
+                        window.pulses.splice(i, 1);
+                    }
+                }
+            }
+            
+            renderer.render(scene, camera);
+        }
+        
+        // Обновление выбросов из аккреционного диска
+        function updateEjections(delta) {
+            for (let i = window.ejections.length - 1; i >= 0; i--) {
+                const ejection = window.ejections[i];
+                ejection.userData.lifetime += delta * simulationSpeed;
+                
+                // Перемещаем частицы
+                const positions = ejection.geometry.attributes.position.array;
+                const velocities = ejection.userData.velocities;
+                
+                for (let j = 0; j < positions.length; j += 3) {
+                    positions[j] += velocities[j/3*3] * delta * simulationSpeed;
+                    positions[j+1] += velocities[j/3*3+1] * delta * simulationSpeed;
+                    positions[j+2] += velocities[j/3*3+2] * delta * simulationSpeed;
+                }
+                
+                ejection.geometry.attributes.position.needsUpdate = true;
+                
+                // Уменьшаем яркость со временем
+                ejection.material.opacity = Math.max(0, 0.8 - (ejection.userData.lifetime / ejection.userData.maxLifetime) * 0.8);
+                
+                // Удаляем, если время жизни истекло
+                if (ejection.userData.lifetime >= ejection.userData.maxLifetime) {
+                    scene.remove(ejection);
+                    window.ejections.splice(i, 1);
+                }
+            }
+        }
+        
+        // Запускаем инициализацию при загрузке страницы
+        document.addEventListener('DOMContentLoaded', () => {
+            init();
+            scheduleEvents(); // Запускаем планировщик случайных событий
+        });
+    </script>
+</body>
+</html>
