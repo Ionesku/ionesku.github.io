@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <title>Micro GTA: Neon Speed</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: #050510;
+      font-family: 'Segoe UI', sans-serif;
+    }
+    #ui {
+      position: fixed;
+      left: 20px;
+      top: 20px;
+      z-index: 10;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .hud-panel {
+      background: rgba(0, 0, 0, 0.7);
+      border-left: 4px solid #00ddee;
+      padding: 10px 15px;
+      color: #fff;
+      backdrop-filter: blur(4px);
+      border-radius: 4px;
+      font-size: 14px;
+      box-shadow: 0 0 15px rgba(0, 221, 238, 0.2);
+    }
+    h1 { margin: 0 0 5px 0; font-size: 18px; color: #00ddee; text-transform: uppercase; letter-spacing: 1px; }
+    .key { color: #ff0055; font-weight: bold; }
+    #speedometer { font-size: 32px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -1px; }
+    #label-speed { font-size: 12px; opacity: 0.7; text-transform: uppercase; }
+    #nitro-status {
+        margin-top: 5px;
+        color: #00ddee;
+        font-weight: bold;
+        opacity: 0;
+        transition: opacity 0.1s;
+    }
+    #nitro-status.active {
+        color: #ff0055;
+        opacity: 1;
+        text-shadow: 0 0 8px #ff0055;
+    }
+  </style>
+</head>
+<body>
+
+<div id="ui">
+  <div class="hud-panel">
+    <h1>Neon City Run</h1>
+    <div><span class="key">WASD</span> — Драйв</div>
+    <div><span class="key">SPACE</span> — Дрифт / Ручник</div>
+    <div><span class="key">SHIFT</span> — Нитро (Boost)</div>
+  </div>
+  <div class="hud-panel" style="border-color: #ff0055;">
+    <div id="speedometer">0</div>
+    <div id="label-speed">km/h</div>
+    <div id="nitro-status">NITRO ACTIVE</div>
+  </div>
+</div>
+
+<script type="module">
+  import * as THREE from 'https://unpkg.com/three@0.156.1/build/three.module.js';
+
+  // ==========================================
+  // CONFIG & ASSETS
+  // ==========================================
+  const CONF = {
+    viewDist: 600,
+    chunkSize: 60,
+    roadWidth: 18,
+    cityRadius: 8,
+    carBaseSpeed: 80,
+    carBoostSpeed: 220,
+    carAccel: 100,
+    carTurn: 3.0,
+    trafficCount: 150,
+    pedestrianCount: 300,
+    pedColliderSize: 3, 
+    carColliderSize: 7,
+    pedFlyVerticalForce: 50, // Усиление вертикальной силы для пешеходов
+    carBounciness: 0.7,      // Коэффициент упругости для машин
+  };
+
+  // --- Текстура Окон (Исправлено, чтобы не было полос) ---
+  function createSkyscraperTexture() {
+    const s = 128; 
+    const c = document.createElement('canvas');
+    c.width = c.height = s;
+    const ctx = c.getContext('2d');
+    
+    ctx.fillStyle = '#1a1a20';
+    ctx.fillRect(0, 0, s, s);
+
+    const rows = 8;
+    const cols = 4;
+    const w = s / cols;
+    const h = s / rows;
+    
+    for(let y=0; y<rows; y++) {
+      for(let x=0; x<cols; x++) {
+        if(Math.random() > 0.5) {
+          const intensity = 0.5 + Math.random() * 0.5;
+          ctx.fillStyle = `rgba(255, 240, 180, ${intensity})`;
+          ctx.fillRect(x*w + 2, y*h + 2, w - 4, h - 4);
+        } else {
+          ctx.fillStyle = '#0a0a10';
+          ctx.fillRect(x*w + 2, y*h + 2, w - 4, h - 4);
+        }
+      }
+    }
+    
+    for(let i=0; i<100; i++) {
+        ctx.fillStyle = `rgba(255,255,255,${Math.random()*0.05})`;
+        ctx.fillRect(Math.random()*s, Math.random()*s, 1, 1);
+    }
+
+    const tex = new THREE.CanvasTexture(c);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(1, 1);
+    tex.anisotropy = 8;
+    return tex;
+  }
+
+  // --- Текстура Асфальта ---
+  function createRoadTexture() {
+    const s = 256;
+    const c = document.createElement('canvas'); c.width=c.height=s;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#222'; ctx.fillRect(0,0,s,s);
+    for(let i=0; i<4000; i++) {
+        ctx.fillStyle = Math.random()>0.5 ? '#333' : '#111';
+        ctx.fillRect(Math.random()*s, Math.random()*s, 2, 2);
+    }
+    const tex = new THREE.CanvasTexture(c);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(60, 60);
+    return tex;
+  }
+
+  // ==========================================
+  // SCENE SETUP
+  // ==========================================
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x050510);
+  scene.fog = new THREE.FogExp2(0x050510, 0.0025);
+
+  const camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, CONF.viewDist);
+  camera.position.set(0, 14, 25);
+  const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.shadowMap.enabled = true; 
+  renderer.shadowMap.type = THREE.PCFShadowMap;
+  document.body.appendChild(renderer.domElement);
+
+  // --- Lights ---
+  const hemiLight = new THREE.HemisphereLight(0x4444ff, 0x442222, 0.4);
+  scene.add(hemiLight);
+
+  const dirLight = new THREE.DirectionalLight(0xffddaa, 1.5);
+  dirLight.position.set(100, 150, 80);
+  dirLight.castShadow = true;
+  dirLight.shadow.mapSize.set(1024, 1024);
+  dirLight.shadow.camera.top = 300;
+  dirLight.shadow.camera.bottom = -300;
+  dirLight.shadow.camera.left = -300;
+  dirLight.shadow.camera.right = 300;
+  scene.add(dirLight);
+
+  // Ground
+  const ground = new THREE.Mesh(
+    new THREE.PlaneGeometry(2000, 2000),
+    new THREE.MeshStandardMaterial({ map: createRoadTexture(), roughness: 0.6, metalness: 0.1 })
+  );
+  ground.rotation.x = -Math.PI/2;
+  ground.receiveShadow = true;
+  scene.add(ground);
+
+  // ==========================================
+  // CITY GENERATION (INSTANCED & EMISSIVE)
+  // ==========================================
+  const colliders = [];
+
+  function initCity() {
+    const geo = new THREE.BoxGeometry(1, 1, 1);
+    geo.translate(0, 0.5, 0); 
+    
+    const mat = new THREE.MeshStandardMaterial({
+      map: createSkyscraperTexture(),
+      color: 0xffffff,
+      roughness: 0.2,
+      metalness: 0.1,
+      // Увеличиваем свечение окон для "ночного" эффекта
+      emissive: 0xffffee,
+      emissiveIntensity: 0.8 
+    });
+
+    const count = (CONF.cityRadius*2+1)**2 * 5; 
+    const mesh = new THREE.InstancedMesh(geo, mat, count);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+
+    const dummy = new THREE.Object3D();
+    const color = new THREE.Color();
+    const tints = [0xaaddff, 0xffaabb, 0xccffcc, 0xffffff, 0xaaaaff];
+
+    let idx = 0;
+    
+    for(let x=-CONF.cityRadius; x<=CONF.cityRadius; x++) {
+      for(let z=-CONF.cityRadius; z<=CONF.cityRadius; z++) {
+        if(x===0 && z===0) continue; 
+
+        const wx = x * CONF.chunkSize;
+        const wz = z * CONF.chunkSize;
+        
+        const pad = 4;
+        const sidewalkW = CONF.chunkSize - CONF.roadWidth;
+        
+        // Платформа квартала
+        dummy.position.set(wx, 0.05, wz);
+        dummy.scale.set(sidewalkW, 0.6, sidewalkW);
+        dummy.updateMatrix();
+        mesh.setMatrixAt(idx, dummy.matrix);
+        mesh.setColorAt(idx, color.setHex(0x333333));
+        idx++;
+        
+        colliders.push({ x: wx, z: wz, size: sidewalkW / 2 });
+
+        // Генерация зданий внутри квартала
+        const split = Math.random() > 0.4 ? 2 : 1;
+        const buildSize = (sidewalkW - pad*2) / split;
+        
+        for(let bx=0; bx<split; bx++) {
+          for(let bz=0; bz<split; bz++) {
+            if(Math.random() > 0.8) continue;
+
+            const h = 10 + Math.pow(Math.random(), 1.5) * 60;
+            
+            const lx = wx - sidewalkW/2 + pad + buildSize/2 + bx*(buildSize);
+            const lz = wz - sidewalkW/2 + pad + buildSize/2 + bz*(buildSize);
+
+            dummy.position.set(lx, 0.6, lz);
+            dummy.scale.set(buildSize - 2, h, buildSize - 2);
+            dummy.updateMatrix();
+            
+            mesh.setMatrixAt(idx, dummy.matrix);
+            mesh.setColorAt(idx, color.setHex(tints[Math.floor(Math.random()*tints.length)]));
+            idx++;
+          }
+        }
+      }
+    }
+    
+    mesh.count = idx;
+    scene.add(mesh);
+  }
+  
+  initCity();
+
+  // ==========================================
+  // TRAFFIC & PEDESTRIANS (INSTANCED)
+  // ==========================================
+  
+  // --- Трафик ---
+  const trafficData = [];
+  const trafficMesh = new THREE.InstancedMesh(
+    new THREE.BoxGeometry(3.5, 1.4, 7),
+    new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4 }), 
+    CONF.trafficCount
+  );
+  trafficMesh.castShadow = true;
+  scene.add(trafficMesh);
+
+  // --- Пешеходы ---
+  const pedData = [];
+  const pedMesh = new THREE.InstancedMesh(
+    new THREE.BoxGeometry(0.8, 1.8, 0.8),
+    new THREE.MeshStandardMaterial({ color: 0xffaa00 }),
+    CONF.pedestrianCount
+  );
+  pedMesh.castShadow = true;
+  scene.add(pedMesh);
+
+  const roadCoords = [];
+  for(let i = -CONF.cityRadius; i < CONF.cityRadius; i++) {
+    roadCoords.push(i * CONF.chunkSize + CONF.chunkSize / 2);
+  }
+
+  function initTraffic() {
+    const dummy = new THREE.Object3D();
+    const color = new THREE.Color();
+    const lanes = [-CONF.roadWidth/2 + 2, CONF.roadWidth/2 - 2]; 
+    
+    for(let i=0; i<CONF.trafficCount; i++) {
+      const isX = Math.random() > 0.5;
+      const fixedCoord = roadCoords[Math.floor(Math.random() * roadCoords.length)];
+      const laneOffset = lanes[Math.floor(Math.random()*2)];
+      const pos = (Math.random()-0.5) * 1000;
+
+      const obj = {
+        isX: isX,
+        fixed: fixedCoord,
+        laneOffset: laneOffset,
+        moving: pos,      
+        dir: laneOffset < 0 ? 1 : -1,
+        speed: 20 + Math.random() * 30,
+        color: Math.random() * 0xffffff,
+        damage: 0,
+        vel: new THREE.Vector3() // Добавляем вектор скорости для упругих столкновений
+      };
+      
+      // Инициализируем вектор скорости
+      if(obj.isX) obj.vel.set(obj.speed * obj.dir, 0, 0);
+      else obj.vel.set(0, 0, obj.speed * obj.dir);
+
+      trafficData.push(obj);
+
+      // Setup initial matrix
+      if(isX) dummy.position.set(obj.moving, 0.7, obj.fixed + obj.laneOffset);
+      else    dummy.position.set(obj.fixed + obj.laneOffset, 0.7, obj.moving);
+      
+      dummy.rotation.y = isX ? (obj.dir>0 ? Math.PI/2 : -Math.PI/2) : (obj.dir>0 ? 0 : Math.PI);
+      dummy.updateMatrix();
+      trafficMesh.setMatrixAt(i, dummy.matrix);
+      trafficMesh.setColorAt(i, color.setHex(obj.color));
+    }
+  }
+
+  function initPeds() {
+    const dummy = new THREE.Object3D();
+    const color = new THREE.Color();
+    
+    for(let i=0; i<CONF.pedestrianCount; i++) {
+      const x = (Math.random()-0.5)*1000;
+      const z = (Math.random()-0.5)*1000;
+      
+      pedData.push({
+        x: x, y: 0, z: z, // Добавляем Y-координату для полета
+        tx: x, tz: z,
+        speed: 2 + Math.random()*2,
+        hit: false,
+        hitTime: 0,
+        velY: 0 // Вертикальная скорость для полета
+      });
+
+      dummy.position.set(x, 0.9, z);
+      dummy.updateMatrix();
+      pedMesh.setMatrixAt(i, dummy.matrix);
+      pedMesh.setColorAt(i, color.setHSL(Math.random(), 0.8, 0.5));
+    }
+  }
+
+  initTraffic();
+  initPeds();
+
+  // ==========================================
+  // PLAYER CAR & PHYSICS
+  // ==========================================
+  const carGroup = new THREE.Group();
+  
+  const carBody = new THREE.Mesh(
+    new THREE.BoxGeometry(3.8, 1.4, 7.5),
+    new THREE.MeshStandardMaterial({ color: 0xff0044, metalness: 0.6, roughness: 0.2 })
+  );
+  carBody.position.y = 0.7;
+  carBody.castShadow = true;
+  carGroup.add(carBody);
+
+  // Фары (Усилены)
+  const hLeft = new THREE.SpotLight(0xffffff, 4, 100, 0.6, 0.5, 1); // Интенсивность 4
+  hLeft.position.set(-1.2, 1.5, 3);
+  hLeft.target.position.set(-1.2, 0, 25);
+  carGroup.add(hLeft); carGroup.add(hLeft.target);
+  const hRight = hLeft.clone();
+  hRight.position.set(1.2, 1.5, 3);
+  hRight.target.position.set(1.2, 0, 25);
+  carGroup.add(hRight); carGroup.add(hRight.target);
+
+  scene.add(carGroup);
+
+  const car = {
+    pos: new THREE.Vector3(0,0,0),
+    vel: new THREE.Vector3(),
+    dir: 0,
+    speed: 0,
+    health: 100,
+    mass: 1000 // Масса для упругих столкновений
+  };
+
+  const keys = { w:0, a:0, s:0, d:0, sp:0, shift:0 };
+  window.addEventListener('keydown', e => { 
+    if(keys[e.key.toLowerCase()]!==undefined) keys[e.key.toLowerCase()]=1; 
+    if(e.code==='Space') keys.sp=1;
+    if(e.code==='ShiftLeft' || e.code==='ShiftRight') keys.shift=1;
+  });
+  window.addEventListener('keyup', e => { 
+    if(keys[e.key.toLowerCase()]!==undefined) keys[e.key.toLowerCase()]=0; 
+    if(e.code==='Space') keys.sp=0;
+    if(e.code==='ShiftLeft' || e.code==='ShiftRight') keys.shift=0;
+  });
+
+  // ==========================================
+  // LOGIC LOOP
+  // ==========================================
+  
+  const dummy = new THREE.Object3D();
+  const carPosInLoop = new THREE.Vector3();
+  const targetPosInLoop = new THREE.Vector3();
+  const hitColor = new THREE.Color();
+  const clock = new THREE.Clock();
+  const GRAVITY = 9.81;
+
+  // --- Вспомогательные векторы для цикла ---
+  const collisionVector = new THREE.Vector3();
+  const tempVel = new THREE.Vector3();
+  const dirToCar = new THREE.Vector3();
+  const carFront = new THREE.Vector3();
+  const camTarget = new THREE.Vector3();
+  const camLook = new THREE.Vector3();
+
+  function animate() {
+    requestAnimationFrame(animate);
+    const dt = Math.min(clock.getDelta(), 0.1);
+    
+    // --- Physics ---
+    const throttle = keys.w - keys.s;
+    const isBoosting = keys.shift && car.speed > 0;
+    
+    const maxSpeed = isBoosting ? CONF.carBoostSpeed : CONF.carBaseSpeed;
+    const accel = CONF.carAccel * (isBoosting ? 1.5 : 1.0);
+    
+    if(throttle !== 0) {
+        car.speed += throttle * accel * dt;
+    } else {
+        car.speed *= 0.98;
+    }
+    
+    if(keys.sp) car.speed *= 0.95;
+    car.speed = Math.max(-maxSpeed/2, Math.min(maxSpeed, car.speed));
+
+    if(Math.abs(car.speed) > 5) {
+        const dir = car.speed > 0 ? 1 : -1;
+        let turn = (keys.a - keys.d) * CONF.carTurn * dt * dir;
+        if(keys.sp) turn *= 1.8;
+        car.dir += turn;
+    }
+
+    carFront.set(Math.sin(car.dir), 0, Math.cos(car.dir));
+    const driftFactor = keys.sp ? 0.5 : 2.5;
+    const targetVel = carFront.clone().multiplyScalar(car.speed);
+    car.vel.lerp(targetVel, driftFactor * dt);
+
+    // Collision Check Buildings
+    const nextPos = car.pos.clone().addScaledVector(car.vel, dt);
+    let hitBuilding = false;
+    for(let c of colliders) {
+        const half = c.size + 1;
+        if(nextPos.x > c.x - half && nextPos.x < c.x + half &&
+           nextPos.z > c.z - half && nextPos.z < c.z + half) {
+            hitBuilding = true; break;
+        }
+    }
+
+    if(hitBuilding) {
+        car.speed *= -0.3;
+        car.vel.multiplyScalar(-0.3);
+    } else {
+        car.pos.copy(nextPos);
+    }
+
+    // --- Dynamic Collisions (Pedestrians & Traffic) ---
+    
+    // 1. Player vs. Traffic (Упругое столкновение)
+    const playerVel = car.vel.clone();
+    
+    for (let i = 0; i < CONF.trafficCount; i++) {
+        const t = trafficData[i];
+        trafficMesh.getMatrixAt(i, dummy.matrix);
+        dummy.matrix.decompose(carPosInLoop, new THREE.Quaternion(), targetPosInLoop);
+        
+        if (car.pos.distanceTo(carPosInLoop) < CONF.carColliderSize) {
+            
+            // Вектор от игрока к боту
+            dirToCar.copy(carPosInLoop).sub(car.pos).normalize();
+            
+            // Проекция скорости игрока на направление столкновения
+            const playerProjection = playerVel.dot(dirToCar);
+            
+            // Проекция скорости бота на направление столкновения
+            const botProjection = t.vel.dot(dirToCar);
+            
+            // Перерасчет скоростей по закону сохранения импульса (упругий удар, масса ~ 1:1)
+            const newPlayerProjection = botProjection * CONF.carBounciness;
+            const newBotProjection = playerProjection * CONF.carBounciness;
+            
+            // Изменение вектора скорости игрока
+            playerVel.addScaledVector(dirToCar, newPlayerProjection - playerProjection);
+            
+            // Изменение вектора скорости бота
+            t.vel.addScaledVector(dirToCar, newBotProjection - botProjection);
+
+            // Обновляем скорость игрока из вектора
+            car.speed = playerVel.length();
+            car.vel.copy(playerVel);
+            
+            // Трафик получает повреждение/отскок
+            t.damage = 1; 
+            t.vel.multiplyScalar(0.5); // Дополнительное гашение скорости бота
+            trafficMesh.getColorAt(i, hitColor);
+            trafficMesh.setColorAt(i, hitColor.lerp(new THREE.Color(0x880000), 0.5));
+            trafficMesh.instanceColor.needsUpdate = true;
+        }
+    }
+
+    // 2. Player vs. Pedestrians (Отлетают вверх)
+    for (let i = 0; i < CONF.pedestrianCount; i++) {
+        const p = pedData[i];
+        pedMesh.getMatrixAt(i, dummy.matrix);
+        dummy.matrix.decompose(carPosInLoop, new THREE.Quaternion(), targetPosInLoop);
+        carPosInLoop.y = 0; // Игнорируем Y-координату пешехода для столкновения
+        
+        if (car.pos.distanceTo(carPosInLoop) < CONF.pedColliderSize) {
+            
+            car.speed *= 0.9; // Легкое замедление игрока
+            
+            // Пешеход отлетает
+            const dirToPed = carPosInLoop.clone().sub(car.pos).normalize();
+            p.hit = true;
+            p.hitTime = clock.elapsedTime;
+            
+            p.tx = carPosInLoop.x + dirToPed.x * 20;
+            p.tz = carPosInLoop.z + dirToPed.z * 20;
+            
+            p.speed = 10; // Скорость отскока по горизонтали
+            p.velY = CONF.pedFlyVerticalForce; // Сильный вертикальный импульс
+
+            pedMesh.setColorAt(i, hitColor.setHex(0xffffff));
+            pedMesh.instanceColor.needsUpdate = true;
+        }
+    }
+
+    // --- Update Car Visuals ---
+    carGroup.position.copy(car.pos);
+    carGroup.rotation.y = car.dir;
+    carBody.rotation.z = (keys.w - keys.s) * 0.05;
+    carBody.rotation.x = (keys.a - keys.d) * 0.08;
+    
+    // Camera follow (slightly above and behind)
+    camTarget.set(
+      car.pos.x - Math.sin(car.dir) * 25,
+      car.pos.y + 14,
+      car.pos.z - Math.cos(car.dir) * 25
+    );
+    camera.position.lerp(camTarget, dt * 4);
+    camLook.copy(car.pos);
+    camLook.y += 2;
+    camera.lookAt(camLook);
+    
+    // UI
+    document.getElementById('speedometer').innerText = Math.abs(Math.round(car.speed));
+    document.getElementById('nitro-status').className = isBoosting ? 'active' : '';
+
+
+    // --- Update Traffic ---
+    for(let i=0; i<CONF.trafficCount; i++) {
+      const t = trafficData[i];
+      
+      // Обновление позиции трафика из его вектора скорости
+      t.moving += t.vel.length() * t.dir * dt * (t.isX ? 1 : 1); // Упрощенное обновление
+      
+      const limit = CONF.cityRadius * CONF.chunkSize + 100;
+      if(t.moving > limit) t.moving = -limit;
+      if(t.moving < -limit) t.moving = limit;
+
+      // Обновление матрицы
+      if(t.isX) {
+        dummy.position.set(t.moving, 0.7, t.fixed + t.laneOffset);
+        dummy.rotation.y = t.dir > 0 ? Math.PI/2 : -Math.PI/2;
+      } else {
+        dummy.position.set(t.fixed + t.laneOffset, 0.7, t.moving);
+        dummy.rotation.y = t.dir > 0 ? 0 : Math.PI;
+      }
+      
+      dummy.updateMatrix();
+      trafficMesh.setMatrixAt(i, dummy.matrix);
+    }
+    trafficMesh.instanceMatrix.needsUpdate = true;
+
+    // --- Update Pedestrians ---
+    for(let i=0; i<CONF.pedestrianCount; i++) {
+        const p = pedData[i];
+        
+        const dx = p.tx - p.x;
+        const dz = p.tz - p.z;
+        const dist = Math.sqrt(dx*dx + dz*dz);
+        
+        if (p.hit) {
+            // Физика полета
+            p.y += p.velY * dt;
+            p.velY -= GRAVITY * 5 * dt; // Ускорение свободного падения
+            
+            // Горизонтальный отскок
+            const move = p.speed * dt;
+            p.x += (dx/dist) * move;
+            p.z += (dz/dist) * move;
+
+            // Приземление
+            if (p.y <= 0 && p.velY < 0) {
+                p.y = 0;
+                p.velY = 0;
+                p.hit = false;
+                p.speed = 2 + Math.random()*2;
+            }
+        } else if(dist < 1 || p.hit && clock.elapsedTime > p.hitTime + 0.5) {
+            p.hit = false;
+            p.speed = 2 + Math.random()*2; 
+            p.tx = p.x + (Math.random()-0.5)*20;
+            p.tz = p.z + (Math.random()-0.5)*20;
+            pedMesh.setColorAt(i, hitColor.setHSL(Math.random(), 0.8, 0.5));
+        } else {
+            const move = p.speed * dt;
+            p.x += (dx/dist) * move;
+            p.z += (dz/dist) * move;
+        }
+
+        dummy.position.set(p.x, 0.9 + p.y, p.z);
+        dummy.rotation.y = Math.atan2(dx, dz);
+        dummy.updateMatrix();
+        pedMesh.setMatrixAt(i, dummy.matrix);
+    }
+    pedMesh.instanceMatrix.needsUpdate = true;
+
+    // --- Render ---
+    renderer.render(scene, camera);
+  }
+
+  animate();
+</script>
+</body>
+</html>
