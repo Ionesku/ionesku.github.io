@@ -1,0 +1,1231 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Wargame - Vector Tiles Engine</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #1a1a1a;
+            color: #eee;
+            font-family: monospace;
+            overflow: hidden;
+        }
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            cursor: grab;
+            position: relative;
+        }
+        canvas { display: block; }
+        #controls {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.8);
+            padding: 10px;
+            z-index: 10;
+            font-size: 12px;
+            pointer-events: none; 
+        }
+        #gameLog {
+            position: absolute;
+            top: 10px;
+            right: 10px; 
+            width: 320px;
+            height: 200px;
+            background: rgba(0,0,0,0.85);
+            padding: 10px;
+            z-index: 10;
+            font-size: 11px;
+            overflow-y: auto;
+            border: 1px solid #444;
+            font-family: 'Courier New', monospace;
+        }
+        #gameControls {
+            position: absolute;
+            top: 230px;
+            right: 10px;
+            background: rgba(0,0,0,0.8);
+            padding: 5px;
+            z-index: 10;
+            display: flex;
+            gap: 5px;
+        }
+        #topBar {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.8);
+            padding: 5px 15px;
+            border: 1px solid #555;
+            border-radius: 4px;
+            z-index: 20;
+            font-size: 16px;
+            font-weight: bold;
+            color: #ffcc00;
+        }
+        button.game-btn {
+            background: #333;
+            color: white;
+            border: 1px solid #555;
+            padding: 5px 10px;
+            cursor: pointer;
+        }
+        select.game-select {
+            background: #333;
+            color: white;
+            border: 1px solid #555;
+            padding: 5px;
+            cursor: pointer;
+        }
+        select.game-select:hover { background: #444; }
+
+        #miniMap {
+            position: absolute;
+            right: 10px;
+            bottom: 10px;
+            width: 200px;
+            height: 200px;
+            border: 1px solid #555;
+            background: #050b12;
+            z-index: 10;
+        }
+        #hint {
+            position: absolute;
+            left: 10px;
+            bottom: 10px;
+            background: rgba(0,0,0,0.7);
+            padding: 4px 6px;
+            font-size: 11px;
+            z-index: 10;
+        }
+        #unitInfo {
+            position: absolute;
+            display: none;
+            background: rgba(20, 30, 40, 0.95);
+            border: 1px solid #6688aa;
+            padding: 8px;
+            border-radius: 4px;
+            z-index: 30;
+            pointer-events: none;
+            color: #fff;
+            min-width: 150px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+        }
+        #unitInfo h3 {
+            margin: 0 0 5px 0;
+            font-size: 14px;
+            border-bottom: 1px solid #555;
+            padding-bottom: 3px;
+        }
+        #unitInfo div {
+            font-size: 12px;
+            margin-bottom: 2px;
+        }
+        .stat-bar {
+            height: 4px;
+            background: #444;
+            margin-top: 2px;
+        }
+        .stat-fill {
+            height: 100%;
+        }
+        #zoomControls {
+            position: absolute;
+            right: 10px;
+            bottom: 230px;
+            background: rgba(0,0,0,0.8);
+            padding: 4px;
+            z-index: 11;
+            display: flex;
+            flex-direction: column;
+        }
+        #zoomControls button {
+            background: #222;
+            color: #eee;
+            border: 1px solid #555;
+            margin: 2px 0;
+            width: 24px;
+            height: 24px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        #zoomControls button:hover {
+            background: #333;
+        }
+    </style>
+
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+</head>
+<body>
+
+<div id="canvas-container">
+    <div id="controls">
+        Wargame Tile Engine (Voronoi Fronts)<br>
+        ▸ ЛКМ — панорамирование<br>
+        ▸ Двойной клик — зум на точку<br>
+        ▸ Shift+ЛКМ — zoom-рамка
+    </div>
+
+    <div id="gameLog">Загрузка разведданных...</div>
+    
+    <div id="topBar">
+        <span id="gameDate">01.09.1939</span>
+    </div>
+
+    <div id="gameControls">
+        <button class="game-btn" id="btnPause">Пауза</button>
+        <select id="speedSelect" class="game-select">
+            <option value="1">Скорость x1</option>
+            <option value="2">Скорость x2</option>
+            <option value="5">Скорость x5</option>
+            <option value="10">Скорость x10</option>
+            <option value="20">Скорость x20</option>
+        </select>
+    </div>
+
+    <div id="unitInfo"></div>
+
+    <canvas id="mapCanvas"></canvas>
+    <canvas id="miniMap"></canvas>
+
+    <div id="zoomControls">
+        <button id="zoomIn">+</button>
+        <button id="zoomReset">•</button>
+        <button id="zoomOut">-</button>
+    </div>
+
+    <div id="hint">Мир / tippecanoe vector tiles</div>
+</div>
+
+<script type="module">
+import Pbf from 'https://unpkg.com/pbf@4.0.1/index.js';
+import { VectorTile } from 'https://esm.run/@mapbox/vector-tile@2.0.4/index.js';
+import { WargameEngine } from './wargame_engine.js';
+import { COUNTRIES } from './wargame_data.js';
+
+class TileEngine {
+    constructor() {
+        this.canvas = document.getElementById('mapCanvas');
+        this.ctx = this.canvas.getContext('2d');
+
+        this.miniCanvas = document.getElementById('miniMap');
+        this.miniCtx = this.miniCanvas.getContext('2d');
+
+        this.tileCache = new Map();
+        this.miniTile = null;      
+        this.transform = d3.zoomIdentity;
+
+        this.tileSize = 256;       
+        this.minZoom = 0;
+        this.maxZoom = 12;          
+        this.dataMaxZoom = 6;       
+
+        this.worldBounds = {
+            minX: -this.tileSize * 10,
+            maxX: this.tileSize * 11,
+            minY: -this.tileSize * 10,                
+            maxY: this.tileSize * 11
+        };
+
+        // стартовый центр: Граница Германии и Франции
+        this.initialCenter = { lat: 49.2, lon: 6.5 }; 
+
+        this.countryColors = new Map();
+        this.containerSel = d3.select("#canvas-container");
+
+        this.boxActive = false;
+        this.boxStart = null;
+        this.boxEnd = null;
+
+        this.hoveredFeature = null; 
+        this.hoveredUnit = null; // For Wargame Engine
+        
+        this.tooltip = document.getElementById('hint'); 
+        this.unitInfoEl = document.getElementById('unitInfo');
+        
+        this.needsRender = true;
+
+        // Init Wargame Engine
+        this.wargame = new WargameEngine(this);
+        this.initGameControls();
+
+        this.resize();
+        window.addEventListener('resize', () => this.resize());
+
+        this.initZoom();
+        this.initInteractions();
+        this.initZoomButtons();
+        this.initMiniMapInteractions();
+        this.initTooltip();
+
+        // Ставим зум 7 для старта
+        this.centerOnLatLon(this.initialCenter.lat, this.initialCenter.lon, 7);
+
+        this.loadMiniTile();
+
+        this.loop();
+    }
+
+    initGameControls() {
+        const btnPause = document.getElementById('btnPause');
+        btnPause.addEventListener('click', () => {
+            this.wargame.paused = !this.wargame.paused;
+            btnPause.textContent = this.wargame.paused ? "Продолжить" : "Пауза";
+        });
+
+        const speedSelect = document.getElementById('speedSelect');
+        speedSelect.addEventListener('change', (e) => {
+            this.wargame.setSpeed(parseInt(e.target.value));
+        });
+    }
+
+    initTooltip() {
+        this.tooltipEl = document.createElement('div');
+        this.tooltipEl.style.position = 'absolute';
+        this.tooltipEl.style.background = 'rgba(0, 0, 0, 0.8)';
+        this.tooltipEl.style.color = '#fff';
+        this.tooltipEl.style.padding = '5px 8px';
+        this.tooltipEl.style.borderRadius = '4px';
+        this.tooltipEl.style.fontSize = '12px';
+        this.tooltipEl.style.pointerEvents = 'none';
+        this.tooltipEl.style.display = 'none';
+        this.tooltipEl.style.zIndex = '20';
+        this.tooltipEl.style.border = '1px solid #555';
+        document.getElementById('canvas-container').appendChild(this.tooltipEl);
+    }
+
+    async gunzipIfNeeded(arrayBuffer) {
+        const bytes = new Uint8Array(arrayBuffer);
+        const isGzip = bytes.length >= 2 && bytes[0] === 0x1f && bytes[1] === 0x8b;
+        if (!isGzip) return arrayBuffer;
+
+        if (typeof DecompressionStream === 'function') {
+            const ds = new DecompressionStream('gzip');
+            const stream = new Response(new Blob([arrayBuffer]).stream().pipeThrough(ds));
+            return await stream.arrayBuffer();
+        }
+
+        const { gunzipSync } = await import('https://cdn.jsdelivr.net/npm/fflate@0.8.2/esm/browser.js');
+        return gunzipSync(bytes).buffer;
+    }
+
+    // label visibility helpers
+    shouldDrawCountryLabel(props, z) {
+        return z >= 2 && z <= 6;
+    }
+
+    shouldDrawCityLabel(props, z) {
+        const rank = props.SCALERANK ?? props.LABELRANK ?? 10;
+        if (z < 4) return rank <= 2;
+        if (z < 6) return rank <= 4;
+        if (z < 8) return rank <= 6;
+        if (z < 10) return rank <= 8;
+        return true;
+    }
+
+    getCountryLabelFont(z) {
+        const size = Math.max(12, 12 + (z - 3) * 2);
+        return `bold ${size}px sans-serif`;
+    }
+
+    getCityLabelFont(z) {
+        const size = Math.max(10, 10 + (z - 4));
+        return `${size}px sans-serif`;
+    }
+
+    getBestName(props) {
+        return props.name || props.name_en || props.NAME || props.NAME_EN || props.NAMEASCII || '';
+    }
+
+    // --- Поиск фичи под курсором ---
+    
+    getFeatureAt(screenX, screenY) {
+        const [wx, wy] = this.transform.invert([screenX, screenY]);
+        const rawZoom = Math.log2(this.transform.k);
+        const tileZoom = Math.max(this.minZoom, Math.min(this.dataMaxZoom, Math.floor(rawZoom)));
+        
+        const n = 1 << tileZoom;
+        const worldToTile = n / this.tileSize;
+        
+        const tx = Math.floor(wx * worldToTile);
+        const ty = Math.floor(wy * worldToTile);
+        
+        const tileId = `${tileZoom}_${tx}_${ty}`;
+        const vt = this.tileCache.get(tileId);
+        
+        if (!vt || vt === 'loading' || !vt.cachedFeatures) return null;
+
+        const layerNames = Object.keys(vt.cachedFeatures);
+        if (!layerNames.length) return null;
+        
+        const extent = vt.layers[layerNames[0]].extent || 4096;
+        const lx = ((wx * worldToTile) - tx) * extent;
+        const ly = ((wy * worldToTile) - ty) * extent;
+
+        const features = vt.cachedFeatures['europe_countries'];
+        if (features) {
+            for (const feature of features) {
+                if (feature.type === 3 && feature._path) {
+                     if (this.ctx.isPointInPath(feature._path, lx, ly)) {
+                         return { feature, tileX: tx, tileY: ty, zoom: tileZoom, extent };
+                     }
+                }
+            }
+        }
+        return null;
+    }
+
+    // --- Wargame Unit Picking ---
+    getUnitAt(screenX, screenY) {
+        // Check distances in screen space
+        // The visual size is roughly constant (e.g. 14px radius)
+        const threshold = 20; // Hitbox radius
+        let closest = null;
+        let minD = threshold;
+
+        this.wargame.units.forEach(unit => {
+            const [wx, wy] = this.latLonToWorld(unit.lat, unit.lon);
+            const sx = this.transform.x + wx * this.transform.k;
+            const sy = this.transform.y + wy * this.transform.k;
+
+            const dist = Math.sqrt(Math.pow(sx - screenX, 2) + Math.pow(sy - screenY, 2));
+            if (dist < minD) {
+                minD = dist;
+                closest = unit;
+            }
+        });
+        return closest;
+    }
+
+    latLonToWorld(lat, lon) {
+        const rad = lat * Math.PI / 180;
+        const xNorm = (lon + 180) / 360;
+        const yNorm = 0.5 - Math.log((1 + Math.sin(rad)) / (1 - Math.sin(rad))) / (4 * Math.PI);
+        return [xNorm * this.tileSize, yNorm * this.tileSize];
+    }
+
+    worldToLatLon(wx, wy) {
+        const xNorm = wx / this.tileSize;
+        const yNorm = wy / this.tileSize;
+        const lon = xNorm * 360 - 180;
+        const n = Math.PI - 2 * Math.PI * yNorm;
+        const lat = (180 / Math.PI) * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)));
+        return { lat, lon };
+    }
+
+    centerOnLatLon(lat, lon, zoomLevel) {
+        const [wx, wy] = this.latLonToWorld(lat, lon);
+        const kNew = Math.pow(2, zoomLevel);
+
+        const cx = this.canvas.width / 2;
+        const cy = this.canvas.height / 2;
+
+        const tx = cx - kNew * wx;
+        const ty = cy - kNew * wy;
+
+        const newTransform = d3.zoomIdentity.translate(tx, ty).scale(kNew);
+        this.containerSel.property("__zoom", newTransform);
+        this.transform = newTransform;
+    }
+
+    initZoom() {
+        this.zoomBehavior = d3.zoom()
+            .scaleExtent([Math.pow(2, this.minZoom), Math.pow(2, this.maxZoom)])
+            .extent([[0, 0], [window.innerWidth, window.innerHeight]])
+            .translateExtent([
+                [this.worldBounds.minX, this.worldBounds.minY],
+                [this.worldBounds.maxX, this.worldBounds.maxY]
+            ])
+            .on("zoom", (e) => {
+                this.transform = e.transform;
+            });
+
+        this.containerSel
+            .call(this.zoomBehavior)
+            .on("dblclick.zoom", null);
+    }
+
+    initInteractions() {
+        this.containerSel.on("dblclick", (event) => {
+            if (event.shiftKey) return;
+            
+            const [sx, sy] = d3.pointer(event, this.canvas);
+            const result = this.getFeatureAt(sx, sy);
+            
+            if (result && result.feature._bbox && result.feature.type === 3) {
+                const { feature, tileX, tileY, zoom, extent } = result;
+                const bbox = feature._bbox;
+                
+                const n = 1 << zoom;
+                const worldTileSize = this.tileSize / n; 
+                const scaleLocalToWorld = worldTileSize / extent;
+                
+                const wMinX = tileX * worldTileSize + bbox.minX * scaleLocalToWorld;
+                const wMaxX = tileX * worldTileSize + bbox.maxX * scaleLocalToWorld;
+                const wMinY = tileY * worldTileSize + bbox.minY * scaleLocalToWorld;
+                const wMaxY = tileY * worldTileSize + bbox.maxY * scaleLocalToWorld;
+                
+                const objWidth = wMaxX - wMinX;
+                const objHeight = wMaxY - wMinY;
+                
+                if (objWidth <= 0 || objHeight <= 0) return;
+
+                const cx = wMinX + objWidth / 2;
+                const cy = wMinY + objHeight / 2;
+
+                const padding = 50;
+                const availableW = this.canvas.width - padding * 2;
+                const availableH = this.canvas.height - padding * 2;
+                
+                const scaleX = availableW / objWidth;
+                const scaleY = availableH / objHeight;
+                
+                let kNew = Math.min(scaleX, scaleY);
+                kNew = Math.max(Math.pow(2, this.minZoom), Math.min(Math.pow(2, this.maxZoom), kNew));
+
+                const tx = this.canvas.width / 2 - kNew * cx;
+                const ty = this.canvas.height / 2 - kNew * cy;
+                
+                this.containerSel.transition().duration(750).call(
+                    this.zoomBehavior.transform,
+                    d3.zoomIdentity.translate(tx, ty).scale(kNew)
+                );
+
+            } else {
+                this.containerSel.transition().duration(300).call(
+                    this.zoomBehavior.scaleBy, 2, [sx, sy]
+                );
+            }
+        });
+
+        this.canvas.addEventListener('mousedown', (e) => this.onMouseDown(e));
+        window.addEventListener('mousemove', (e) => this.onMouseMove(e));
+        window.addEventListener('mouseup',   (e) => this.onMouseUp(e));
+    }
+
+    initZoomButtons() {
+        const zoomInBtn    = document.getElementById('zoomIn');
+        const zoomOutBtn   = document.getElementById('zoomOut');
+        const zoomResetBtn = document.getElementById('zoomReset');
+
+        const getCenter = () => [this.canvas.width / 2, this.canvas.height / 2];
+
+        zoomInBtn.addEventListener('click', () => {
+            this.containerSel.transition().duration(300).call(this.zoomBehavior.scaleBy, 1.5, getCenter());
+        });
+
+        zoomOutBtn.addEventListener('click', () => {
+            this.containerSel.transition().duration(300).call(this.zoomBehavior.scaleBy, 0.6, getCenter());
+        });
+
+        zoomResetBtn.addEventListener('click', () => {
+            const [wx, wy] = this.latLonToWorld(this.initialCenter.lat, this.initialCenter.lon);
+            const kNew = Math.pow(2, 7); // Reset to zoom 7
+            const tx = this.canvas.width / 2 - kNew * wx;
+            const ty = this.canvas.height / 2 - kNew * wy;
+            
+            this.containerSel.transition().duration(500).call(
+                this.zoomBehavior.transform, 
+                d3.zoomIdentity.translate(tx, ty).scale(kNew)
+            );
+        });                
+    }
+
+    initMiniMapInteractions() {
+        let isDragging = false;
+        let lastX = 0;
+        let lastY = 0;
+
+        const handleDrag = (clientX, clientY) => {
+             const dx = clientX - lastX;
+             const dy = clientY - lastY;
+             
+             lastX = clientX;
+             lastY = clientY;
+
+             // Delta in Minimap Pixels
+             const rawZoom = Math.log2(this.transform.k);
+             const mainZoom = Math.max(this.minZoom, Math.floor(rawZoom));
+             let miniZoom = mainZoom - 3; 
+             if (miniZoom < 0) miniZoom = 0; 
+             if (miniZoom > this.dataMaxZoom) miniZoom = this.dataMaxZoom;
+
+             const kMini = Math.pow(2, miniZoom);
+             
+             // Delta World (pixels on minimap / minimap scale)
+             const dWorldX = dx / kMini;
+             const dWorldY = dy / kMini;
+
+             if (!isFinite(dWorldX) || !isFinite(dWorldY)) return;
+             
+             this.containerSel.call(
+                this.zoomBehavior.translateBy,
+                -dWorldX, 
+                -dWorldY
+             );
+        };
+
+        this.miniCanvas.addEventListener('mousedown', (e) => {
+            e.stopPropagation();
+            e.preventDefault(); // Prevent text selection etc.
+            if (e.button === 0) {
+                isDragging = true;
+                lastX = e.clientX;
+                lastY = e.clientY;
+            }
+        });
+        
+        window.addEventListener('mousemove', (e) => {
+            if (isDragging) {
+                handleDrag(e.clientX, e.clientY);
+            }
+        });
+
+        window.addEventListener('mouseup', () => {
+            isDragging = false;
+        });
+
+        this.miniCanvas.addEventListener('dblclick', (e) => e.stopPropagation());
+    }
+
+    onMouseDown(event) {
+        if (event.shiftKey && event.button === 0) {
+            const rect = this.canvas.getBoundingClientRect();
+            this.boxActive = true;
+            this.boxStart = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+            this.boxEnd   = { ...this.boxStart };
+            this.containerSel.on(".zoom", null);
+        }
+    }
+
+    onMouseMove(event) {
+        const rect = this.canvas.getBoundingClientRect();
+        const mx = event.clientX - rect.left;
+        const my = event.clientY - rect.top;
+
+        if (this.boxActive) {
+            this.boxEnd = { x: mx, y: my };
+            return; 
+        }
+
+        // 1. Check Units first (highest priority tooltip)
+        const unit = this.getUnitAt(mx, my);
+        this.hoveredUnit = unit;
+        
+        if (unit) {
+            this.tooltipEl.style.display = 'none';
+            
+            // Show Detailed Unit Info
+            this.unitInfoEl.style.display = 'block';
+            this.unitInfoEl.style.left = (event.clientX + 15) + 'px';
+            this.unitInfoEl.style.top = (event.clientY + 15) + 'px';
+            
+            const c = COUNTRIES[unit.country];
+            this.unitInfoEl.innerHTML = `
+                <h3 style="color: ${c.accent}">${unit.name}</h3>
+                <div>Тип: ${unit.type.name}</div>
+                <div>Страна: ${c.name}</div>
+                <div>Боеспособность: ${Math.floor(unit.strength)}%</div>
+                <div class="stat-bar"><div class="stat-fill" style="width:${unit.strength}%; background:#0f0;"></div></div>
+                <div>Мораль: ${Math.floor(unit.morale)}%</div>
+                <div class="stat-bar"><div class="stat-fill" style="width:${unit.morale}%; background:#00f;"></div></div>
+                <div>Снабжение: ${Math.floor(unit.supply)}%</div>
+                <div>Статус: ${unit.state}</div>
+            `;
+            return;
+        } else {
+            this.unitInfoEl.style.display = 'none';
+        }
+
+        // 2. Check Map Features
+        const result = this.getFeatureAt(mx, my);
+        if (result) {
+            const { feature } = result;
+            let name = this.getBestName(feature.properties || {});
+            
+            // Проверяем, захвачена ли эта территория другой страной
+            const [wx, wy] = this.transform.invert([mx, my]);
+            const latLon = this.worldToLatLon(wx, wy);
+            const controller = this.wargame.territoryManager.getOwner(latLon.lat, latLon.lon);
+            
+            if (controller && COUNTRIES[controller]) {
+                // Показываем страну-захватчика
+                name = COUNTRIES[controller].name;
+            }
+            
+            if (name) {
+                this.tooltipEl.style.display = 'block';
+                this.tooltipEl.style.left = (event.clientX + 15) + 'px';
+                this.tooltipEl.style.top = (event.clientY + 15) + 'px';
+                this.tooltipEl.textContent = name;
+                return;
+            }
+        }
+        this.tooltipEl.style.display = 'none';
+    }
+
+    onMouseUp(event) {
+        if (!this.boxActive) return;
+        this.boxActive = false;
+
+        this.containerSel.call(this.zoomBehavior);
+
+        const start = this.boxStart;
+        const end = this.boxEnd;
+        this.boxStart = this.boxEnd = null;
+
+        const minX = Math.min(start.x, end.x);
+        const maxX = Math.max(start.x, end.x);
+        const minY = Math.min(start.y, end.y);
+        const maxY = Math.max(start.y, end.y);
+
+        if ((maxX - minX) < 10 || (maxY - minY) < 10) return;
+
+        const [wx1, wy1] = this.transform.invert([minX, minY]);
+        const [wx2, wy2] = this.transform.invert([maxX, maxY]);
+
+        const wWorld = Math.abs(wx2 - wx1);
+        const hWorld = Math.abs(wy2 - wy1);
+
+        const kX = this.canvas.width / wWorld;
+        const kY = this.canvas.height / hWorld;
+        let kNew = Math.min(kX, kY);
+        kNew = Math.max(Math.pow(2, this.minZoom), Math.min(Math.pow(2, this.maxZoom), kNew));
+
+        const tx = this.canvas.width / 2 - kNew * ((wx1 + wx2) / 2);
+        const ty = this.canvas.height / 2 - kNew * ((wy1 + wy2) / 2);
+
+        this.containerSel.transition().duration(400).call(
+            this.zoomBehavior.transform,
+            d3.zoomIdentity.translate(tx, ty).scale(kNew)
+        );
+    }
+
+    async loadMiniTile() {
+        try {
+            const res = await fetch('map_data/0/0/0.pbf');
+            if (!res.ok) return;
+            const buf = await this.gunzipIfNeeded(await res.arrayBuffer());
+            const vt = new VectorTile(new Pbf(buf));
+            this.processTile(vt); 
+            this.miniTile = vt;
+        } catch(e) {                
+            console.warn("MiniMap tile 0/0/0 not loaded", e);
+        }
+    }
+
+    resize() {
+        this.canvas.width = window.innerWidth;
+        this.canvas.height = window.innerHeight;
+
+        const rect = this.miniCanvas.getBoundingClientRect();
+        this.miniCanvas.width = rect.width;
+        this.miniCanvas.height = rect.height;
+        
+        if (this.zoomBehavior) {
+            this.zoomBehavior.extent([[0, 0], [this.canvas.width, this.canvas.height]]);
+        }
+    }
+
+    loop() {
+        try {
+            this.wargame.tick();
+            this.draw();
+        } catch (e) {
+            console.error("Game Loop Error:", e);
+        }
+        requestAnimationFrame(() => this.loop());
+    }
+
+    draw() {
+        if (!this.transform || isNaN(this.transform.k) || this.transform.k <= 0) {
+             return;
+        }
+
+        this.lastTransform = this.transform;
+        this.needsRender = false;
+
+        const ctx = this.ctx;
+        ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        ctx.fillStyle = '#102030'; // Sea color background
+        ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+        ctx.save();
+        ctx.translate(this.transform.x, this.transform.y);
+        ctx.scale(this.transform.k, this.transform.k);
+
+        const rawZoom = Math.log2(this.transform.k);
+        const tileZoom = Math.max(this.minZoom, Math.min(this.dataMaxZoom, Math.floor(rawZoom)));
+        
+        const visibleTiles = this.getVisibleTiles(tileZoom);
+        
+        // PASS 1: Base Layers (Land, Lakes, Old Borders)
+        for (const tile of visibleTiles) {
+            this.renderTile(tileZoom, tile.x, tile.y, 'base');
+        }
+
+        // PASS 2: Dynamic Territory (Opaque Fill hides old borders/land)
+        // We assume TerritoryManager draws opaque fill AND stroke
+        this.wargame.drawTerritories(ctx, this.transform);
+
+        // PASS 3: Overlay Layers (Rivers, Roads, Cities)
+        for (const tile of visibleTiles) {
+            this.renderTile(tileZoom, tile.x, tile.y, 'overlay');
+        }
+
+        // PASS 4: Units & Battles
+        this.wargame.drawUnits(ctx, this.transform);
+
+        ctx.restore();
+
+        if (this.boxActive && this.boxStart && this.boxEnd) {
+            ctx.save();
+            ctx.strokeStyle = '#ffcc00';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([5, 5]);
+            ctx.strokeRect(
+                this.boxStart.x, this.boxStart.y,
+                this.boxEnd.x - this.boxStart.x, this.boxEnd.y - this.boxStart.y
+            );
+            ctx.restore();
+        }
+
+        this.drawMiniMap();
+    }
+
+    getVisibleTiles(zoom) {
+        if (zoom < 0 || zoom > 20 || isNaN(zoom)) return [];
+        
+        const tiles = [];
+        const n = 1 << zoom;                
+
+        const topLeft = this.transform.invert([0, 0]);
+        const bottomRight = this.transform.invert([this.canvas.width, this.canvas.height]);
+
+        const worldToTile = n / this.tileSize;
+
+        let minX = Math.floor(topLeft[0] * worldToTile);
+        let maxX = Math.floor(bottomRight[0] * worldToTile);
+        let minY = Math.floor(topLeft[1] * worldToTile);
+        let maxY = Math.floor(bottomRight[1] * worldToTile);
+
+        minX = Math.max(0, minX);
+        maxX = Math.min(n - 1, maxX);
+        minY = Math.max(0, minY);
+        maxY = Math.min(n - 1, maxY);
+
+        for (let x = minX; x <= maxX; x++) {
+            for (let y = minY; y <= maxY; y++) {
+                tiles.push({ x, y });
+            }
+        }
+        return tiles;
+    }
+
+    async renderTile(z, x, y, pass = 'all') {
+        const tileId = `${z}_${x}_${y}`;
+
+        if (z > this.dataMaxZoom) return;
+
+        if (this.tileCache.has(tileId)) {
+            const vt = this.tileCache.get(tileId);
+            if (vt && vt !== 'loading') {
+                this.drawVectorLayers(vt, z, x, y, pass);
+            }
+            return;
+        }
+
+        // Only trigger load if this is the first pass or 'all' (avoid double triggering)
+        if (pass === 'overlay' && this.tileCache.get(tileId) === 'loading') return;
+
+        if (!this.tileCache.has(tileId)) {
+            this.tileCache.set(tileId, 'loading');
+
+            try {
+                const response = await fetch(`map_data/${z}/${x}/${y}.pbf`);
+                if (!response.ok) {
+                    this.tileCache.set(tileId, null); 
+                    return;
+                }
+                const buffer = await this.gunzipIfNeeded(await response.arrayBuffer());
+                const vt = new VectorTile(new Pbf(buffer));
+
+                this.processTile(vt);
+
+                this.tileCache.set(tileId, vt);
+                this.needsRender = true;
+            } catch (e) {
+                this.tileCache.set(tileId, null);
+            }
+        }
+    }
+
+    processTile(vt) {
+        vt.cachedFeatures = {};
+        
+        const layerNames = Object.keys(vt.layers);
+        for (const name of layerNames) {
+            const layer = vt.layers[name];
+            const features = [];
+            
+            for (let i = 0; i < layer.length; i++) {
+                const feature = layer.feature(i);
+                
+                const cacheItem = {
+                    type: feature.type,
+                    properties: feature.properties,
+                    _path: null,
+                    _geometry: null,
+                    _area: 0,
+                    _center: null
+                };
+
+                const geom = feature.loadGeometry();
+                
+                if (feature.type === 1) {
+                    cacheItem._geometry = geom;
+                    features.push(cacheItem);
+                    continue;
+                }
+
+                cacheItem._path = new Path2D();
+                
+                let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+
+                for (const ring of geom) {
+                    if (!ring.length) continue;
+                    cacheItem._path.moveTo(ring[0].x, ring[0].y);
+                    
+                    for (let k = 0; k < ring.length; k++) {
+                        const p = ring[k];
+                        if (k > 0) cacheItem._path.lineTo(p.x, p.y);
+                        
+                        if (p.x < minX) minX = p.x;
+                        if (p.x > maxX) maxX = p.x;
+                        if (p.y < minY) minY = p.y;
+                        if (p.y > maxY) maxY = p.y;
+                    }
+                    if (feature.type === 3) cacheItem._path.closePath();
+                }
+                
+                if (minX !== Infinity) {
+                    cacheItem._bbox = { minX, minY, maxX, maxY };
+                }
+
+                if (feature.type === 3) {
+                    let area = 0;
+                    let cx = 0, cy = 0, pts = 0;
+                    if (geom.length > 0) {
+                        const ring = geom[0];
+                        for (let k = 0; k < ring.length; k++) {
+                            cx += ring[k].x;
+                            cy += ring[k].y;
+                            
+                            const next = ring[(k + 1) % ring.length];
+                            area += ring[k].x * next.y - next.x * ring[k].y;
+                        }
+                        pts = ring.length;
+                    }
+                    cacheItem._area = Math.abs(area / 2);
+                    if (pts > 0) {
+                        cacheItem._center = { x: cx / pts, y: cy / pts };
+                    }
+                }
+                
+                features.push(cacheItem);
+            }
+            vt.cachedFeatures[name] = features;
+        }
+    }
+
+    drawVectorLayers(vt, z, x, y, pass = 'all') {
+        this.drawVectorLayersOnContext(vt, z, x, y, this.ctx, null, pass);
+    }
+
+    drawVectorLayersOnContext(vt, z, x, y, ctx, customScale = null, pass = 'all') {
+        if (!vt.cachedFeatures) return;
+
+        const layerNames = Object.keys(vt.cachedFeatures);
+        if (!layerNames.length) return;
+
+        const extent = vt.layers[layerNames[0]].extent || 4096;
+        const n = 1 << z;
+        const worldTileSize = this.tileSize / n; 
+        const factor = worldTileSize / extent;   
+        
+        ctx.save();
+        ctx.translate(x * worldTileSize, y * worldTileSize);
+        ctx.scale(factor, factor);
+
+        // Calculate inverse scale for line width consistency
+        let invScale = 1;
+        if (customScale) {
+            invScale = 1 / (customScale * factor);
+        } else if (ctx === this.ctx) {
+            invScale = 1 / (this.transform.k * factor);
+        } else {
+            invScale = 1 / factor; 
+        }
+
+        // Define Layers for Passes
+        // Base: Countries, Lakes, Boundaries (so they get covered by territory)
+        // Overlay: Rivers, Roads, Cities (drawn on top)
+        const baseLayers = ['europe_countries', 'europe_lakes', 'europe_boundaries'];
+        const overlayLayers = ['europe_rivers', 'europe_roads', 'europe_relief_points', 'europe_cities'];
+
+        let order = [];
+        if (pass === 'all') {
+            order = [...baseLayers, ...overlayLayers];
+        } else if (pass === 'base') {
+            order = baseLayers;
+        } else if (pass === 'overlay') {
+            order = overlayLayers;
+        }
+
+        for (const name of order) {
+            const features = vt.cachedFeatures[name];
+            if (!features) continue;
+
+            if (name === 'europe_countries') {
+                ctx.lineWidth = invScale;
+                for (const feature of features) {
+                    if (feature.type !== 3) continue;
+                    const cname = this.getBestName(feature.properties || {});
+                    ctx.fillStyle = this.getCountryColor(cname);
+                    ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+                    ctx.fill(feature._path);
+                    ctx.stroke(feature._path);
+                }
+            } 
+            else if (name === 'europe_boundaries') {
+                 ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+                 ctx.lineWidth = invScale;
+                 for (const feature of features) if (feature.type === 2) ctx.stroke(feature._path);
+            }
+            else if (name === 'europe_lakes') {
+                 ctx.fillStyle = '#66ccff';
+                 ctx.strokeStyle = '#3399cc';
+                 ctx.lineWidth = invScale;
+                 for (const feature of features) if (feature.type === 3) { ctx.fill(feature._path); ctx.stroke(feature._path); }
+            }
+            else if (name === 'europe_rivers') {
+                ctx.strokeStyle = '#66ccff';
+                const width = (customScale ? 1.5 : (this.transform.k < 32 ? 0.8 : 1.5)) * invScale;
+                ctx.lineWidth = width;
+                for (const feature of features) if (feature.type === 2) ctx.stroke(feature._path);
+            }
+            else if (name === 'europe_roads') {
+                ctx.strokeStyle = '#666';
+                ctx.lineWidth = 0.5 * invScale;
+                for (const feature of features) if (feature.type === 2) ctx.stroke(feature._path);
+            }
+            else if (name === 'europe_relief_points') {
+                 ctx.fillStyle = '#8B4513'; 
+                 const size = 4 * invScale;
+                 for (const feature of features) {
+                    if (feature.type !== 1 || !feature._geometry) continue; 
+                    const geom = Array.isArray(feature._geometry) ? feature._geometry : [[feature._geometry]];
+                    for (const pts of geom) {
+                        for (const p of pts) {
+                            if (!p) continue;
+                            ctx.fillRect(p.x - size/2, p.y - size/2, size, size);
+                        }
+                    }
+                }
+            }
+            else if (name === 'europe_cities') {
+                for (const feature of features) {
+                    if (feature.type !== 1 || !feature._geometry) continue; 
+                    const props = feature.properties || {};
+                    const cityName = this.getBestName(props);
+                    const geom = Array.isArray(feature._geometry) ? feature._geometry : [[feature._geometry]];
+
+                    for (const pts of geom) {
+                        for (const p of pts) {
+                            if (!p) continue;
+                            ctx.fillStyle = '#ffcc00';
+                            ctx.beginPath();
+                            const radius = 3 * invScale;
+                            ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+                            ctx.fill();
+
+                            if (!customScale && cityName && this.shouldDrawCityLabel(props, Math.log2(this.transform.k))) {
+                                ctx.save();
+                                ctx.translate(p.x, p.y);
+                                ctx.scale(invScale, invScale);
+                                ctx.fillStyle = '#eee';
+                                ctx.strokeStyle = 'black';
+                                ctx.lineWidth = 2;
+                                ctx.font = this.getCityLabelFont(Math.log2(this.transform.k));
+                                ctx.textAlign = 'left';
+                                ctx.textBaseline = 'middle';
+                                ctx.strokeText(cityName, 5, 0);
+                                ctx.fillText(cityName, 5, 0);
+                                ctx.restore();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        ctx.restore();
+    }
+
+    getCountryColor(name) {
+        if (this.countryColors.has(name)) return this.countryColors.get(name);
+        let hash = 0;
+        for (let i = 0; i < name.length; i++) {
+            hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+        }
+        const hue = hash % 360;
+        const color = `hsl(${hue}, 40%, 35%)`;
+        this.countryColors.set(name, color);
+        return color;
+    }
+
+    drawMiniMap() {
+        const ctx = this.miniCtx;
+        const w = this.miniCanvas.width;
+        const h = this.miniCanvas.height;
+
+        ctx.clearRect(0, 0, w, h);
+        ctx.fillStyle = '#050b12';
+        ctx.fillRect(0, 0, w, h);
+
+        // --- Dynamic Radar Logic ---
+        // Minimap follows the camera but zoomed out by a fixed factor (e.g. -4 levels)
+        // So it shows the surrounding context.
+        const rawZoom = Math.log2(this.transform.k);
+        const mainZoom = Math.max(this.minZoom, Math.floor(rawZoom));
+        
+        // MiniMap Zoom is Main Zoom - 3, but clamped
+        let miniZoom = mainZoom - 3; 
+        if (miniZoom < 0) miniZoom = 0; 
+        if (miniZoom > this.dataMaxZoom) miniZoom = this.dataMaxZoom;
+        
+        // Calculate MiniMap Transform
+        // Center of MiniMap = Center of Main View (this.transform.invert(w/2, h/2))
+        // We need to construct a transform that puts that world point in the center of the mini canvas
+        // with scale corresponding to miniZoom.
+
+        const [centerX, centerY] = this.transform.invert([this.canvas.width / 2, this.canvas.height / 2]);
+        
+        // Scale factor for miniZoom
+        const kMini = Math.pow(2, miniZoom);
+        
+        // Translate so that centerX, centerY is at w/2, h/2
+        const tx = w / 2 - kMini * centerX;
+        const ty = h / 2 - kMini * centerY;
+
+        ctx.save();
+        ctx.translate(tx, ty);
+        ctx.scale(kMini, kMini);
+
+        // Determine visible tiles for this mini transform
+        // We can't use getVisibleTiles directly because it uses this.transform
+        // So we manually calculate tiles for mini view
+        const n = 1 << miniZoom;
+        const worldTileSize = this.tileSize / n;
+        
+        // Viewport in world coords
+        // (0,0) screen -> invert with mini transform
+        const miniLeft = (0 - tx) / kMini;
+        const miniTop = (0 - ty) / kMini;
+        const miniRight = (w - tx) / kMini;
+        const miniBottom = (h - ty) / kMini;
+
+        const minX = Math.floor(miniLeft / worldTileSize);
+        const maxX = Math.floor(miniRight / worldTileSize);
+        const minY = Math.floor(miniTop / worldTileSize);
+        const maxY = Math.floor(miniBottom / worldTileSize);
+        
+        // Clamp
+        const clampMinX = Math.max(0, minX);
+        const clampMaxX = Math.min(n - 1, maxX);
+        const clampMinY = Math.max(0, minY);
+        const clampMaxY = Math.min(n - 1, maxY);
+
+        // Render Tiles
+        for (let x = clampMinX; x <= clampMaxX; x++) {
+            for (let y = clampMinY; y <= clampMaxY; y++) {
+                const tileId = `${miniZoom}_${x}_${y}`;
+                if (this.tileCache.has(tileId)) {
+                    const vt = this.tileCache.get(tileId);
+                    if (vt && vt !== 'loading') {
+                        this.drawVectorLayersOnContext(vt, miniZoom, x, y, ctx, kMini);
+                    }
+                } else {
+                    // Trigger load (silent)
+                    this.loadTile(miniZoom, x, y);
+                }
+            }
+        }
+        
+        ctx.restore();
+
+        // Draw Border
+        ctx.strokeStyle = '#555';
+        ctx.strokeRect(0, 0, w, h);
+
+        // Draw Viewport Rectangle (Radar)
+        // The Main Viewport is the center of the minimap.
+        // Dimensions of Main Viewport in World Coords:
+        const mainW = this.canvas.width / this.transform.k;
+        const mainH = this.canvas.height / this.transform.k;
+        
+        // Convert to MiniMap Screen Coords
+        // Center is (w/2, h/2)
+        // Width = mainW * kMini
+        // Height = mainH * kMini
+        
+        const rectW = mainW * kMini;
+        const rectH = mainH * kMini;
+        const rectX = w / 2 - rectW / 2;
+        const rectY = h / 2 - rectH / 2;
+
+        ctx.fillStyle = 'rgba(255, 204, 0, 0.1)';
+        ctx.strokeStyle = '#ffcc00';
+        ctx.lineWidth = 2;
+        
+        ctx.fillRect(rectX, rectY, rectW, rectH);
+        ctx.strokeRect(rectX, rectY, rectW, rectH);
+        
+        // Draw Crosshair
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.beginPath();
+        ctx.moveTo(w/2, 0); ctx.lineTo(w/2, h);
+        ctx.moveTo(0, h/2); ctx.lineTo(w, h/2);
+        ctx.stroke();
+    }
+
+    async loadTile(z, x, y) {
+        const tileId = `${z}_${x}_${y}`;
+        if (this.tileCache.has(tileId)) return;
+        
+        // Prevent loading tiles outside data range
+        if (z > this.dataMaxZoom) return;
+
+        this.tileCache.set(tileId, 'loading');
+        try {
+             const response = await fetch(`map_data/${z}/${x}/${y}.pbf`);
+             if (!response.ok) { this.tileCache.set(tileId, null); return; }
+             const buffer = await this.gunzipIfNeeded(await response.arrayBuffer());
+             const vt = new VectorTile(new Pbf(buffer));
+             this.processTile(vt);
+             this.tileCache.set(tileId, vt);
+             this.needsRender = true;
+        } catch(e) {
+             this.tileCache.set(tileId, null);
+        }
+    }
+}
+
+const engine = new TileEngine();
+window.engine = engine;
+</script>
+</body>
+</html>
